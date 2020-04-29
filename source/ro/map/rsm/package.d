@@ -15,6 +15,7 @@ import
 		ro.grf,
 		ro.map,
 		ro.conv,
+		ro.conv.map,
 		ro.map.rsm.structs;
 
 
@@ -24,7 +25,7 @@ struct RsmObject
 	Matrix4 trans;
 
 	RsmObject[] childs;
-	RomFrameOrientation[] oris;
+	FrameOrientation[] oris;
 }
 
 struct RsmConverter
@@ -91,7 +92,7 @@ private:
 		{
 			SubMeshInfo sm =
 			{
-				tex: Converter.imageOf(`data/texture/` ~ _rsm.texs[tid].name.convertName)
+				tex: RomConverter.imageOf(`data/texture/` ~ _rsm.texs[tid].name.convertName)
 			};
 
 			with(sm.data)

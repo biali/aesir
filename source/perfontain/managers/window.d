@@ -1,18 +1,14 @@
 module perfontain.managers.window;
 
 import
-		std.algorithm,
-		std.conv,
-		std.stdio,
-		std.range,
-		std.string,
+		std,
 
 		perfontain.misc,
 		perfontain,
 		perfontain.math.matrix,
 		perfontain.opengl,
 
-		tt.error;
+		utils.except;
 
 public import
 				derelict.sdl2.sdl;
@@ -101,9 +97,8 @@ class WindowManager
 		}
 
 		SDL_StopTextInput();
-		keys = cast(bool *)SDL_GetKeyboardState(null);
+		SDL_SetWindowMinimumSize(_win, 640, 480);
 
-		// events
 		onVSync(PE.settings.vsync);
 
 		PE.settings.vsyncChange.permanent(&onVSync);
@@ -120,7 +115,7 @@ class WindowManager
 
 	@property cursor(bool v)
 	{
-		!SDL_SetRelativeMouseMode(!v) || throwSDLError;
+		//!SDL_SetRelativeMouseMode(!v) || throwSDLError;
 	}
 
 	@property title(string s)
@@ -164,7 +159,7 @@ package(perfontain):
 
 	void processEvents()
 	{
-		SDL_Event evt = void;
+		SDL_Event evt;
 
 		while(SDL_PollEvent(&evt))
 		{
@@ -181,22 +176,33 @@ package(perfontain):
 				PE.onWheel.first(sc);
 				break;
 
-			case SDL_KEYDOWN:
-				onKey(evt.key.keysym.sym, true);
-
-				PE.hotkeys.onPress(evt.key.keysym.scancode);
-				break;
-
 			case SDL_KEYUP:
-				onKey(evt.key.keysym.sym, false);
+			case SDL_KEYDOWN:
+				auto r = evt.key.keysym.sym;
+
+				if(!evt.key.repeat || r == SDLK_BACKSPACE)
+				{
+					auto st = evt.key.state == SDL_PRESSED;
+
+					if(st)
+					{
+						_keys ~= r;
+					}
+					else
+					{
+						_keys = _keys.remove(_keys.countUntil(r));
+					}
+
+					PE.onKey.last(r, st);
+				}
+
 				break;
 
 			case SDL_WINDOWEVENT:
 				switch(evt.window.event)
 				{
 				case SDL_WINDOWEVENT_FOCUS_GAINED:
-					_active = true;
-					_skip = true;
+					_active = _skip = true;
 					break;
 
 				case SDL_WINDOWEVENT_FOCUS_LOST:
@@ -204,8 +210,7 @@ package(perfontain):
 					break;
 
 				case SDL_WINDOWEVENT_RESIZED:
-					_size = Vector2s(evt.window.data1, evt.window.data2);
-					PE.triggerAspect;
+					PE.onResize(_size = Vector2s(evt.window.data1, evt.window.data2));
 					break;
 
 				default:
@@ -222,7 +227,7 @@ package(perfontain):
 					SDL_BUTTON_RIGHT: MOUSE_RIGHT
 				];
 
-				auto t = map[evt.button.button];
+				auto t = map[cast(SDL_D_MouseButton)evt.button.button]; // TODO: REPORT DERELICT
 				auto b = evt.button.state == SDL_PRESSED;
 
 				if(!b && evt.button.clicks == 2)
@@ -245,8 +250,7 @@ package(perfontain):
 					PE.onMoveDelta(Vector2s(evt.motion.xrel, evt.motion.yrel));
 				}
 
-				PE.onMove(Vector2s(evt.motion.x, evt.motion.y));
-
+				PE.onMove.reverse(Vector2s(evt.motion.x, evt.motion.y));
 				break;
 
 			case SDL_TEXTINPUT:
@@ -266,14 +270,9 @@ package(perfontain):
 		}
 	}
 
-//private:
-	void onKey(SDL_Keycode key, bool pressed)
-	{
-		PE.onKey(key, pressed);
-	}
-
-	const(bool) *keys;
 private:
+	mixin publicProperty!(uint[], `keys`);
+
 	void onVSync(bool v)
 	{
 		//if(!v || SDL_GL_SetSwapInterval(-1))
@@ -289,7 +288,7 @@ private:
 
 	bool throwSDLError(string f = __FILE__, uint l = __LINE__)
 	{
-		return throwErrorImpl(f, l, cast(string)SDL_GetError().fromStringz);
+		return throwError(SDL_GetError().fromStringz, f, l);
 	}
 
 	SDL_Window *_win;

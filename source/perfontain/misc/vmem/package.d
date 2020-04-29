@@ -11,7 +11,7 @@ import
 		perfontain.misc,
 		perfontain.misc.rc,
 
-		tt.logger;
+		utils.logger;
 
 public import
 				perfontain.misc.vmem.region;
@@ -76,20 +76,20 @@ private:
 	{
 		if(v)
 		{
-			assert(data.length <= 8 * 1024 * 1024);
-
 			auto old = data.as!uint;
-			auto tmp = alloca(data.length)[0..data.length].as!uint;
+			auto tmp = ScopeArray!uint(data.length / 4);
 
 			foreach(i, ref e; tmp)
 			{
 				e = old[i] + v;
 			}
 
-			data = tmp;
+			vbo.update(tmp[], p);
 		}
-
-		vbo.update(data, p);
+		else
+		{
+			vbo.update(data, p);
+		}
 	}
 
 	void compact(uint len)

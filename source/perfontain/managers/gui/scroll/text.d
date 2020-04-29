@@ -12,52 +12,63 @@ import
 
 final class ScrolledText : GUIElement
 {
-	this(GUIElement p, Vector2s sz, ushort id)
+	this(GUIElement p, Vector2s sz)
 	{
-		super(p);
+		super(p, Vector2s(sz.x, font.height * sz.y));
 
-		size = new Scrolled(this, Vector2s(sz.x, PE.fonts.base.height), sz.y, id).size;
+		new Scrolled(this, Vector2s(1, sz.y), font.height);
+
+		sc.size.x = size.x;
+		sc.onResize;
 	}
 
-	void clear()
+	/*void clear()
 	{
 		sc.clear;
-	}
+	}*/
 
 	void add(string s, Color c = colorTransparent)
 	{
-		PE.fonts.base.toLines(colorSplit(s, c), sc.container.size.x).each!(a => add(a));
+		font
+			.toLines(colorSplit(s, c), sc.width)
+			.each!(a => add(a));
 	}
 
 	bool autoBottom = true;
 private:
-	void add(GUIElement e, CharColor[] arr)
-	{
-		auto t = new GUIStaticText(e, arr.map!(a => a.c).array.toUTF8);
-
-		t.color = arr[0].col;
-		t.pos.x = e.size.x;
-
-		e.size.x += t.size.x;
-	}
+	mixin MakeChildRef!(Scrolled, `sc`, 0);
 
 	void add(CharColor[] line)
 	{
 		auto e = new GUIElement(null);
 
-		if(line.length)
+		void cb(CharColor[] arr)
 		{
-			eachGroup!((a, b) => a.col != b.col)(line, (CharColor[] a) => add(e, a));
+			auto t = new GUIStaticText(e, arr.map!(a => a.c).array.toUTF8);
 
-			e.size.y = e.childs[0].size.y;
-			e.flags = WIN_CASCADE_SHOW;
+			t.pos.x = e.size.x;
+			t.color = arr[0].color;
+
+			e.size.x += t.size.x;
 		}
 
-		sc.add(e, true, autoBottom);
+		if(line.length)
+		{
+			eachGroup!((a, b) => a.color != b.color)(line, &cb);
+
+			e.size.y = e.childs[0].size.y;
+		}
+
+		sc.add(e);
+
+		if(autoBottom)
+		{
+			sc.pose(sc.maxIndex);
+		}
 	}
 
-	inout sc()
+	static font()
 	{
-		return cast(Scrolled)childs[0];
+		return PE.fonts.base;
 	}
 }

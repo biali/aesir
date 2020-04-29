@@ -11,7 +11,7 @@ import
 		std.exception,
 		std.algorithm,
 
-		ciema,
+		stb.image,
 
 		perfontain,
 		perfontain.misc,
@@ -19,7 +19,7 @@ import
 		perfontain.shader.lang,
 		perfontain.shader.types,
 
-		tt.error;
+		utils.except;
 
 
 final class Shader : RCounted
@@ -38,7 +38,7 @@ final class Shader : RCounted
 			int status;
 			glGetShaderiv(id, GL_COMPILE_STATUS, &status);
 
-			status || throwError("shader `%s' failed to compile:\n%s", name, compileLog);
+			status || throwError!"shader `%s' failed to compile:\n%s"(name, compileLog);
 		}
 	}
 
@@ -63,6 +63,6 @@ private:
 		auto str = new char[len];
 
 		glGetShaderInfoLog(id, len, null, str.ptr);
-		return cast(string)str[0..$ - 1];
+		return str[0..$ - 1].assumeUnique;
 	}
 }

@@ -33,14 +33,12 @@ import
 
 final:
 
-class WinBase : WinBasic
+class WinBase : WinBasic2
 {
 	this()
 	{
 		{
-			name = `base`;
-
-			super(Vector2s(220, 108), MSG_CHARACTER, false); // TODO: FIX ROent.self.cleanName
+			super(MSG_CHARACTER, `base`); // TODO: FIX ROent.self.cleanName
 
 			if(pos.x < 0)
 			{
@@ -48,264 +46,140 @@ class WinBase : WinBasic
 			}
 		}
 
+		auto w1 = new GUIElement(main);
+		auto w2 = new GUIElement(main);
+
+		{
+			auto hp = new InfoMeter(w1, `HP`);
+			auto sp = new InfoMeter(w1, `SP`);
+
+			RO.status.hp.onChange.permanent(a => hp.value = a);
+			RO.status.maxHp.onChange.permanent(a => hp.maxValue = a);
+
+			RO.status.sp.onChange.permanent(a => sp.value = a);
+			RO.status.maxSp.onChange.permanent(a => sp.maxValue = a);
+
+			sp.moveY(hp, POS_ABOVE);
+			w1.toChildSize;
+
+			hp.moveX(POS_MAX);
+			sp.moveX(POS_MAX);
+		}
+
+		w2.moveY(w1, POS_ABOVE);
+
+		{
+			auto base = new InfoMeter(w2, MSG_BASE_LVL);
+			auto job = new InfoMeter(w2, MSG_JOB_LVL);
+
+			RO.status.blvl.onChange.permanent(a => base.misc = a);
+			RO.status.bexp.onChange.permanent(a => base.value = a);
+			RO.status.bnextExp.onChange.permanent(a => base.maxValue = a);
+
+			RO.status.jlvl.onChange.permanent(a => job.misc = a);
+			RO.status.jexp.onChange.permanent(a => job.value = a);
+			RO.status.jnextExp.onChange.permanent(a => job.maxValue = a);
+
+			job.moveY(base, POS_ABOVE);
+			w2.toChildSize;
+
+			base.moveX(POS_MAX);
+			job.moveX(POS_MAX);
+		}
+
 		{
 			auto arr =
 			[
-				tuple(MSG_INV, [ SDL_SCANCODE_LALT, SDL_SCANCODE_E ], () => doShow(ROgui.inv)),
-				tuple(MSG_EQP, [ SDL_SCANCODE_LALT, SDL_SCANCODE_Q ], () => doShow(ROgui.status)),
-				tuple(MSG_SK, [ SDL_SCANCODE_LALT, SDL_SCANCODE_S ], () => doShow(ROgui.skills)),
-				tuple(MSG_OPTS, [ SDL_SCANCODE_LALT, SDL_SCANCODE_O ], () => doShow(ROgui.settings)),
+				tuple(MSG_INV, () => RO.gui.inv.showOrHide),
+				tuple(MSG_EQP, () => RO.gui.status.showOrHide),
+				tuple(MSG_SK, () => RO.gui.skills.showOrHide),
+				tuple(MSG_OPTS, () => RO.gui.settings.showOrHide),
 			];
 
-			Button e;
+			auto t = new Table(main, Vector2s(1, 0));
 
-			foreach(i, v; arr)
-			{
-				auto b = new Button(this, BTN_PART, v[0], PE.fonts.small);
-				auto d = v[2].toDelegate;
+			arr.each!(a => t.add(new Button(null, a[0], a[1].toDelegate)));
 
-				b.onClick = d;
-				b.pos = Vector2s(size.x - b.size.x - 3, WIN_TOP_SZ.y + i * (b.size.y + 2) + 2);
-
-				if(!e || e.size.x < b.size.x)
-				{
-					e = b;
-				}
-
-				PE.hotkeys.add(new Hotkey(d, v[1]));
-			}
-
-			foreach(v; childs[$ - arr.length..$])
-			{
-				v.pos.x = e.pos.x;
-				v.size.x = e.size.x;
-			}
+			t.childs.each!(a => a.childs[0].toParentSize);
+			t.moveX(w2, POS_ABOVE, 4);
 		}
 
-		auto z = 6;
-
-		{
-			auto
-					u = new GUIStaticText(this, `HP`),
-					v = new GUIStaticText(this, `SP`);
-
-			auto x = max(u.size.x, v.size.x) + 2;
-			auto pos = Vector2s(z, WIN_TOP_SZ.y + z);
-
-			hp = new PercMeter(this);
-			sp = new PercMeter(this);
-
-			u.pos = pos + Vector2s(0, (hp.size.y - u.size.y) / 2);
-			v.pos = pos + Vector2s(0, hp.size.y + 4);
-
-			hp.pos = pos + Vector2s(x, 0);
-			sp.pos = hp.pos + Vector2s(0, hp.size.y + 4);
-		}
-
-		{
-			auto
-					u = new GUIStaticText(this, MSG_BASE_LVL),
-					v = new GUIStaticText(this, MSG_JOB_LVL);
-
-			auto x = max(u.size.x, v.size.x) + 2;
-			auto pos = Vector2s(z, sp.pos.y + sp.size.y + 4);
-
-			base = new LevelMeter(this);
-			job = new LevelMeter(this);
-
-			u.pos = pos;
-			v.pos = pos + Vector2s(0, base.size.y);
-
-			base.pos = pos + Vector2s(x, 0);
-			job.pos = base.pos + Vector2s(0, base.size.y);
-		}
-	}
-
-	PercMeter
-				hp,
-				sp;
-
-	LevelMeter	base,
-				job;
-private:
-	static doShow(GUIElement e)
-	{
-		e.show(!e.visible);
-		e.focus;
+		adjust;
 	}
 }
 
-class PercMeter : GUIElement
+class InfoMeter : GUIElement
 {
-	this(GUIElement e)
-	{
-		super(e);
-
-		auto b = new Meter(this);
-
-		with(PE.fonts)
-		{
-			auto x = base.widthOf(`100%`);
-			size = Vector2s(b.size.x + x, max(small.height + b.size.y, base.height));
-		}
-
-		b.onUpdate = &onUpdate;
-	}
-
-	@property value(uint v) { meter.value = v; }
-	@property maxValue(uint v) { meter.maxValue = v; }
-private:
-	@property meter()
-	{
-		return cast(Meter)childs.front;
-	}
-
-	void onUpdate()
-	{
-		while(childs.length > 1)
-		{
-			childs.popBack;
-		}
-
-		auto x = meter.size.x;
-
-		auto
-				u = meter.value,
-				v = meter.maxValue;
-
-		auto e = new GUIStaticText(this, format(`%u / %u`, u, v), 0, PE.fonts.small);
-		e.pos = Vector2s((x - e.size.x) / 2, size.y - e.size.y);
-
-		e = new GUIStaticText(this, format(`%u%%`, v ? u * 100 / v : 0));
-		e.pos = Vector2s(x + 2, (size.y - e.size.y) / 2);
-	}
-}
-
-class LevelMeter : GUIElement
-{
-	this(GUIElement e)
-	{
-		super(e);
-
-		auto b = new Meter(this, true);
-
-		with(PE.fonts)
-		{
-			auto x = base.widthOf(`999`);
-
-			size = Vector2s(b.size.x + x, base.height);
-		}
-
-		b.pos = Vector2s(0, (size.y - b.size.y) / 2);
-		b.onUpdate = &onUpdate;
-	}
-
-	@property value(uint v) { meter.value = v; }
-	@property maxValue(uint v) { meter.maxValue = v; }
-
-	@property lvl(uint v)
-	{
-		while(childs.length > 1)
-		{
-			childs.popBack;
-		}
-
-		auto e = new GUIStaticText(this, v.to!string);
-		e.pos.x = cast(short)(size.x - e.size.x);
-	}
-
-private:
-	@property meter()
-	{
-		return cast(Meter)childs.front;
-	}
-
-	void onUpdate() {} // TODO: GET RID
-}
-
-class Meter : GUIElement
-{
-	this(GUIElement p, bool tip = false)
+	this(GUIElement p, string s)
 	{
 		super(p);
 
-		_tip = tip;
-		size = Vector2s(80, 5);
-	}
+		auto e = new GUIStaticText(this, s);
 
-	~this()
-	{
-		if(_win)
+		new class GUIQuad
 		{
-			_win.remove;
-		}
-	}
-
-	override void draw(Vector2s p) const
-	{
-		if(maxValue)
-		{
-			if(auto n = size.x * value / maxValue)
+			this()
 			{
-				drawQuad(p + pos, Vector2s(min(size.x, n), size.y), Color(120, 225, 80, 255));
+				super(this.outer, Color(200, 200, 200, 255));
+
+				flags.captureFocus = true;
 			}
+
+			override void onHover(bool st)
+			{
+				if(st)
+				{
+					new TextTooltip(format(`%u / %u`, value, maxValue));
+				}
+			}
+		};
+
+		bg.size = BAR_SIZE + Vector2s(2);
+		bg.moveX(e, POS_ABOVE, 4);
+
+		new GUIQuad(this, Color(120, 225, 80, 255));
+		proc.move(bg, POS_MIN, 1, bg, POS_MIN, 1);
+
+		{
+			auto r = new GUIElement(this, Vector2s(0, PE.fonts.small.height));
+			r.moveY(bg, POS_ABOVE);
 		}
+
+		toChildSize;
+		onUpdate;
+
+		e.moveY(POS_CENTER);
 	}
 
-	override void onMove()
-	{
-		if(_win)
-		{
-			_win.updatePos;
-		}
-	}
+	mixin StatusValue!(uint, `misc`, onUpdate);
+	mixin StatusValue!(uint, `value`, onUpdate);
+	mixin StatusValue!(uint, `maxValue`, onUpdate);
+private:
+	enum BAR_SIZE = Vector2s(80, 5);
 
-	override void onHover(bool st)
-	{
-		if(!_tip)
-		{
-			return;
-		}
+	mixin MakeChildRef!(GUIQuad, `bg`, 1);
+	mixin MakeChildRef!(GUIQuad, `proc`, 2);
 
-		if(st)
+	void onUpdate()
+	{
+		if(auto n = maxValue ? ulong(BAR_SIZE.x) * min(value, maxValue) / maxValue : 0)
 		{
-			_win = new TipPopup(format(` %u / %u `, value, maxValue));
+			proc.flags.hidden = false;
+			proc.size = Vector2s(n, BAR_SIZE.y);
 		}
 		else
 		{
-			_win.remove;
-			_win = null;
+			proc.flags.hidden = true;
 		}
-	}
 
-	mixin StatusValue!(uint, `value`, onUpdate);
-	mixin StatusValue!(uint, `maxValue`, onUpdate);
+		childs.popBack;
 
-	void delegate() onUpdate;
-private:
-	bool _tip;
-	TipPopup _win;
-}
+		FontInfo fi =
+		{
+			font: PE.fonts.small
+		};
 
-class TipPopup : GUIStaticText
-{
-	this(string s)
-	{
-		super(PE.gui.root, s);
-
-		color = colorWhite;
-		flags |= WIN_TOP_MOST;
-	}
-
-	override void draw(Vector2s p) const
-	{
-		drawQuad(p + pos, size, Color(0, 0, 0, 180));
-
-		super.draw(p);
-	}
-
-	void updatePos()
-	{
-		pos = PE.window.mpos - Vector2s(-4, size.y + 4);
+		auto e = new GUIStaticText(this, misc ? misc.to!string : format(`%s / %s`, price(value), price(maxValue)), fi);
+		e.move(bg, POS_CENTER, 0, bg, POS_ABOVE);
 	}
 }

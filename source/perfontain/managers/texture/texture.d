@@ -6,7 +6,9 @@ import
 
 		perfontain,
 		perfontain.opengl,
-		perfontain.misc.dxt;
+		perfontain.misc.dxt,
+
+		stb.dxt;
 
 public import
 				perfontain.managers.texture.types;
@@ -93,6 +95,8 @@ final class Texture : RCounted
 		{
 			glMakeTextureHandleNonResidentARB(_handle);
 		}
+
+		//assert(isResident == b);
 	}
 
 	const bind(ubyte idx)
@@ -144,12 +148,12 @@ private:
 
 		if(t <= TEX_DXT_5)
 		{
-			foreach(uint i, ref m; levels)
+			foreach(i, ref m; levels)
 			{
 				assert(m.data.ptr);
-				assert(m.data.length == texDataLen(m.sz, type));
+				assert(m.data.length == dxtTextureSize(m.sz.x, m.sz.y, type == TEX_DXT_5));
 
-				glCompressedTextureSubImage2D(id, i, 0, 0, m.sz.x, m.sz.y, ts[0], cast(uint)m.data.length, m.data.ptr);
+				glCompressedTextureSubImage2D(id, cast(uint)i, 0, 0, m.sz.x, m.sz.y, ts[0], cast(uint)m.data.length, m.data.ptr);
 			}
 		}
 		else

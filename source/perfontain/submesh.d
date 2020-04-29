@@ -7,6 +7,7 @@ import
 		std.typecons,
 		std.container,
 		std.algorithm,
+		std.container.rbtree,
 
 		perfontain,
 		perfontain.misc.rc,
@@ -22,8 +23,39 @@ import
 		perfontain.math.bbox,
 		perfontain.math.matrix,
 
-		tt.error;
+		utils.except;
 
+
+/*enum
+{
+	NONE,
+	NORMAL = 2,
+	TEXCOORD = 4,
+	COLOR = 8,
+}
+
+struct MTriangle
+{
+	uint[3] v;
+	double[4] err = 1;
+	int deleted,dirty,attr;
+	Vector!(double, 3) n;
+	Vector!(double, 3)[3] uvs;
+	int material;
+}
+
+struct MVertex
+{
+	Vector!(double, 3) p;
+	int tstart,tcount;
+	double[10] q = 0;
+	int border;
+}
+
+extern(C)
+{
+	bool simplify_mesh(MVertex*	, MTriangle*, ref uint, ref uint);
+}*/
 
 struct SubMeshData
 {
@@ -48,6 +80,73 @@ struct SubMeshData
 		}
 	}
 
+	void unify()
+	{
+		/*MVertex[] vs;
+		MTriangle[] ts;
+
+		auto r = asVertexes;
+
+
+
+		foreach(arr; indices.chunks(3))
+		{
+			MTriangle t;
+
+			t.v = arr;
+			t.attr = TEXCOORD;
+			t.material = -1;
+			t.uvs = arr.map!(a => Vector!(double, 3)(r[a].t, 0)).array;
+
+			ts ~= t;
+		}
+
+		r.each!((ref a) { a.t = Vector2(0); a.n = Vector3(0); });
+
+		minimize;
+
+		foreach(ref v; r)
+		{
+			vs ~= MVertex(Vector!(double, 3)(v.p));
+		}
+
+		foreach(i, arr; indices.chunks(3).enumerate)
+		{
+			ts[i].v = arr;
+		}
+
+		uint	vc = cast(uint)vs.length,
+				tc = cast(uint)ts.length;
+
+		auto o = tc;
+
+		if(!simplify_mesh(vs.ptr, ts.ptr, vc, tc,))
+		{
+			return;
+		}
+
+		log(`%s -> %s`, o, tc);
+
+		ts = ts[0..tc];
+		vs = vs[0..vc];
+
+		vertices = null;
+
+		foreach(ref t; ts)
+		{
+			Vertex[3] arr;
+
+			foreach(i, ref v; arr)
+			{
+				v = Vertex(vs[t.v[i]].p, Vector3.init, t.uvs[i].xy);
+			}
+
+			vertices ~= arr.toByte;
+		}
+
+		indices = makeIndices(tc);*/
+	}
+
 	void clear()
 	{
 		auto vs = asVertexes;
@@ -60,7 +159,7 @@ struct SubMeshData
 
 			if(valueEqual(calcNormal(a.p, b.p, c.p).length, 0)) // TODO: FIX ???
 			{
-				indices.removeStable(i, i + 1, i + 2);
+				indices = indices.remove(i, i + 1, i + 2);
 				//triangleArea(a.p, b.p, c.p).writeln;
 			}
 			else
@@ -81,7 +180,7 @@ struct SubMeshData
 			t[0].n = t[1].n = t[2].n = ns ? -n : n;
 		}
 
-		Vector3 *[][int[3]] aa;
+		Vector3*[][int[3]] aa;
 
 		foreach(ref v; tris)
 		{

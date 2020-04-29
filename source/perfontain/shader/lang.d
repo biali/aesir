@@ -16,7 +16,7 @@ struct ProgramCreator
 {
 	this(string n)
 	{
-		log.info2(`creating %s shader`, _name = n);
+		logger.info2(`creating %s shader`, _name = n);
 	}
 
 	void define(string s)
@@ -77,6 +77,7 @@ private:
 			}
 		}
 
+		res ~= "#extension GL_ARB_shader_image_load_store : require\n";
 		res ~= "#extension GL_ARB_shading_language_420pack : require\n";
 		res ~= "#extension GL_ARB_shader_storage_buffer_object : require\n";
 

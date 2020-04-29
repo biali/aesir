@@ -1,8 +1,7 @@
 module perfontain.managers.gui.select.box;
 
 import
-		std.array,
-		std.algorithm,
+		std,
 
 		perfontain;
 
@@ -13,38 +12,40 @@ final:
 
 class SelectBox : GUIElement
 {
-	this(GUIElement p, GUIElement[] arr, ushort id, ushort sid, ushort w, short idx = -1)
+	this(GUIElement p, GUIElement[] arr, int idx = -1)
 	{
 		assert(arr.length);
+		super(p, arr.calcSize);
 
-		_sid = sid;
+		new GUIImage(this, SELECT_ARROW);
+		new GUIElement(this, size).pos = 1.Vector2s;
+
+		arrow.action(&popup);
+		arrow.move(POS_MIN, size.x + 1, POS_CENTER);
+
+		toChildSize;
+		pad(1);
+
 		_arr = arr;
-
-		size = Vector2s(w, arr[0].size.y + 2);
-
-		{
-			auto i = new GUIImage(this, id);
-
-			i.onClick = &doPopup;
-			i.pos = Vector2s(size.x - i.size.x - 2, (size.y - i.size.y - 1) / 2);
-		}
-
-		arr.each!(a => a.pos.x = 1);
+		_selected = idx;
 
 		if(idx >= 0)
 		{
 			select(idx);
 		}
-
-		super(p);
 	}
 
 	~this()
 	{
 		if(_pop)
 		{
-			_pop.deattach;
+			_pop._box = null;
 		}
+	}
+
+	override void onResize()
+	{
+		arrow.moveX(POS_MAX, -1);
 	}
 
 	override void draw(Vector2s p) const
@@ -56,142 +57,133 @@ class SelectBox : GUIElement
 		drawQuad(n + Vector2s(1, size.y - 1), Vector2s(size.x - 1, 1), borderColor);
 		drawQuad(n + Vector2s(size.x - 1, 1), Vector2s(1, size.y - 2), borderColor);
 
-		auto w = childs.front;
-
-		drawQuad(n + Vector2s(w.pos.x - 2, 1), Vector2s(1, size.y - 2), borderColor);
-		drawQuad(n + Vector2s(w.pos.x, 2), Vector2s(w.size.x, size.y - 4), borderColor);
+		drawQuad(n + Vector2s(arrow.pos.x - 1, 1), Vector2s(1, size.y - 2), borderColor);
+		drawQuad(n + Vector2s(arrow.pos.x, 1), Vector2s(arrow.size.x, size.y - 2), Color(200, 200, 200, 128));
 
 		super.draw(p);
 	}
 
-	void delegate(short) onChange;
+	@property elements()
+	{
+		return _arr[];
+	}
+
+	void delegate(int) onChange;
 private:
-	mixin publicProperty!(short, `idx`, `-1`);
+	mixin publicProperty!(int, `selected`);
+	mixin MakeChildRef!(GUIImage, `arrow`, 0);
 
-	const elemWidth()
+	const elemSize()
 	{
-		return cast(ushort)(childs[0].pos.x - 3); // TODO: REWRITE ?
+		return Vector2s(arrow.pos.x - 2, size.y - 2);
 	}
 
-	void select(ushort idx)
+	void select(int idx)
 	{
-		if(_idx >= 0)
+		if(_selected >= 0)
 		{
-			childs.popBack;
+			_arr[_selected].deattach;
 		}
 
-		auto e = new GUIElement(this);
+		if(_pop)
+		{
+			_pop = null;
+			_arr.each!(a => a.deattach);
+		}
 
-		e.pos = Vector2s(1);
-		e.childs ~= _arr[_idx = idx];
+		if(idx >= 0)
+		{
+			_arr[idx].attach(childs.back);
+		}
+
+		_selected = idx;
 	}
 
-	void doPopup()
+	void popup()
 	{
-		if(!_pop)
-		{
-			_pop = new SelectPopup(this);
-		}
-
-		if(_idx >= 0)
-		{
-			_pop.toPos(_idx);
-		}
-
-		_pop.attach(PE.gui.root);
-
-		_pop.focus;
-		_pop.pos = absPos + Vector2s(0, size.y);
+		assert(!_pop);
+		_pop = new SelectPopup(this);
 	}
 
-	ushort _sid;
+	SelectPopup _pop;
 	RCArray!GUIElement _arr;
-
-	RC!SelectPopup _pop;
 }
 
 private:
 
-class PopupSelector : Selector
+class SelectPopup : Selector
 {
-	this(SelectPopup p)
+	this(SelectBox box)
 	{
-		_p = p;
+		super(PE.gui.root);
+
+		_box = box;
+		_idx = box.selected;
+
+		box.select(-1);
+
+		auto q = new GUIQuad(this, colorWhite);
+		auto s = new Scrolled(this, Vector2s(1, min(8, box.elements.length)), box.elemSize.y);
+
+		foreach(i, c; box.elements)
+		{
+			auto v = new Selectable(null, cast(int)i);
+
+			v.size = box.elemSize;
+			c.attach(v);
+
+			s.add(v);
+		}
+
+		size = q.size = Vector2s(box.size.x - 2, s.size.y);
+
+		s.size.x = size.x;
+		s.onResize;
+
+		if(box.absEnd.y + size.y > parent.size.y)
+		{
+			pos = Vector2s(box.absPos.x, box.absPos.y - size.y + 1);
+		}
+		else
+		{
+			pos = Vector2s(box.absPos.x, box.absEnd.y - 1);
+		}
+
+		pos.x += 1;
+		focus;
 	}
 
-	override void select(int idx)
+	~this()
 	{
-		with(_p)
+		if(_box)
 		{
-			auto v = cast(ushort)idx;
-			_b.select(v);
-
-			if(auto f = _b.onChange)
-			{
-				f(v);
-			}
-
-			focus(false);
+			_box.select(_idx);
 		}
 	}
 
-private:
-	SelectPopup _p;
-}
-
-class SelectPopup : GUIElement
-{
-	this(SelectBox b)
+	override void onFocus(bool v)
 	{
-		super(null);
-
-		auto arr = b._arr[];
-		auto s = new Scrolled(this, Vector2s(b.size.x - 3, b.size.y - 2), cast(ushort)min(arr.length, 4), b._sid);
-
-		s.pos.x = 1;
-		auto ps = new PopupSelector(this);
-
-		foreach(uint i, c; arr)
-		{
-			auto v = allocateRC!SelectableItem(null, ps);
-
-			v.size = Vector2s(b.elemWidth, c.size.y);
-			v.idx = i;
-			v.childs ~= c;
-
-			s.add(v, true);
-		}
-
-		_b = b;
-		size = Vector2s(b.size.x, s.size.y + 1);
-	}
-
-	override void draw(Vector2s p) const
-	{
-		auto n = p + pos;
-
-		drawQuad(n, Vector2s(1, size.y), borderColor);
-		drawQuad(n + Vector2s(1, size.y - 1), Vector2s(size.x - 1, 1), borderColor);
-		drawQuad(n + Vector2s(size.x - 1, 0), Vector2s(1, size.y - 1), borderColor);
-
-		drawQuad(n + Vector2s(1, 0), Vector2s(size.x - 2, size.y - 1));
-
-		super.draw(p);
-	}
-
-	override void onFocus(bool b)
-	{
-		if(!b)
+		if(!v)
 		{
 			deattach;
 		}
 	}
 
-	void toPos(int idx)
+	override void select(int idx)
 	{
-		(cast(Scrolled)childs.front).toPos(cast(ushort)idx);
+		_idx = idx;
+
+		if(_box.onChange)
+		{
+			_box.onChange(idx);
+		}
+
+		deattach;
 	}
 
 private:
-	SelectBox _b;
+	mixin MakeChildRef!(Scrolled, `scroll`, 0);
+
+	int _idx;
+	SelectBox _box;
 }

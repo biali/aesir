@@ -21,15 +21,20 @@ class StatsUpper : GUIStaticText
 {
 	this(GUIElement w)
 	{
-		super(w, `▲`, FONT_BOLD);
+		FontInfo fi =
+		{
+			flags: FONT_BOLD
+		};
 
-		flags = 0;
+		super(w, `▲`, fi);
+
+		flags = Win.none;
 		color = Color(30, 33, 150, 255);
 	}
 
-	override void onPress(bool)
+	override void onPress(Vector2s, bool)
 	{
-		auto idx = cast(int)ROgui
+		auto idx = cast(int)RO.gui
 									.status
 									.stats
 									.childs[]
@@ -42,12 +47,19 @@ class StatsUpper : GUIStaticText
 
 class StatsSlot : GUIElement
 {
-	this(GUIElement win, ushort w, string name, ushort value, ushort bonus, ushort cost)
+	this(GUIElement p, ushort w, string name, ushort value, ushort bonus, ushort cost)
 	{
+		super(p);
+
+		FontInfo fi =
+		{
+			flags: FONT_BOLD
+		};
+
 		auto sw = PE.fonts.base.widthOf(`_`, FONT_BOLD);
 
 		{
-			auto e = new GUIStaticText(this, name, FONT_BOLD);
+			auto e = new GUIStaticText(this, name, fi);
 			e.color = Color(30, 33, 150, 255);
 
 			size = Vector2s(w, e.size.y + 1);
@@ -72,8 +84,6 @@ class StatsSlot : GUIElement
 				e.pos = Vector2s(size.x - sw - e.size.x, 0);
 			}
 		}
-
-		super(win);
 	}
 
 	override void draw(Vector2s p) const
@@ -88,9 +98,9 @@ class StatsSlot : GUIElement
 
 class StatsView : GUIElement
 {
-	this(GUIElement win, ushort w)
+	this(GUIElement p, ushort w)
 	{
-		super(win);
+		super(p);
 
 		foreach(i, s; Stats)
 		{

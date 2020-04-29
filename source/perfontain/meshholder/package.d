@@ -1,7 +1,7 @@
 module perfontain.meshholder;
 
 import
-		std.array,
+		std,
 
 		perfontain;
 
@@ -32,6 +32,12 @@ final class MeshHolder : RCounted
 
 		HolderMesh[] meshes;
 		RCArray!Texture texs;
+	}
+
+	const size()
+	{
+		assert(texs.length == 1);
+		return texs[0].size;
 	}
 
 private:

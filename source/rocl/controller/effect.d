@@ -11,6 +11,7 @@ import
 		ro.conv,
 
 		rocl.game,
+		rocl.render.nodes,
 		rocl.entity.visual;
 
 
@@ -28,11 +29,11 @@ final class EffectController
 
 	void addSkill(uint id, Vector2s pos)
 	{
-		auto e = ROdb.query!uint(format(`select main from sk_effects join skills using(name) where id = %u;`, id));
+		auto e = ROdb.skillEffect(id);
 
 		if(e.length)
 		{
-			add(e[0][0], pos.Vector2);
+			add(e[0], pos.Vector2);
 		}
 	}
 
@@ -41,7 +42,7 @@ final class EffectController
 		string n;
 
 		{
-			auto r = ROdb.query!(string, uint)(format(`select name, rnd from effects where id = %u;`, id));
+			auto r = ROdb.effect(id);
 
 			if(r.length)
 			{
@@ -50,7 +51,7 @@ final class EffectController
 			}
 			else
 			{
-				log.warning(`unknown effect %u`, id);
+				logger.warning(`unknown effect %u`, id);
 				return;
 			}
 		}
@@ -66,7 +67,7 @@ final class EffectController
 		}
 		catch(Exception e)
 		{
-			log.error(`effect %u: %s`, id, e.msg);
+			logger.error(`effect %u: %s`, id, e.msg);
 		}
 	}
 

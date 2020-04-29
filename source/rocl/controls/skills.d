@@ -30,14 +30,12 @@ import
 
 final:
 
-class WinSkills : WinBasic
+class WinSkills : WinBasic2
 {
 	this()
 	{
 		{
-			name = `skills`;
-
-			super(Vector2s(300, 200), MSG_SKILLS);
+			super(MSG_SKILLS, `skills`);
 
 			if(pos.x < 0)
 			{
@@ -45,15 +43,15 @@ class WinSkills : WinBasic
 			}
 		}
 
-		_sc = new Scrolled(this, Vector2s(280, 36), 4, SCROLL_ARROW);
-		_sc.pos = Vector2s(10, 20);
+		/*_sc = new Scrolled(this, Vector2s(280, 36), 4);
+		_sc.pos = Vector2s(10, 20);*/
 
 		_ss = new SkillSelector;
 	}
 
 	void update(Skill s) // TODO: REMAKE THIS SHIT
 	{
-		auto idx = s.idx;
+		/*auto idx = s.idx;
 		auto r = cast(SkillItem)_sc.rows[idx];
 
 		auto e = new SkillItem(r.parent, _ss, s, r.size.x);
@@ -65,19 +63,19 @@ class WinSkills : WinBasic
 
 		_sc.rows[idx] = e;
 
-		if(e.idx == _ss.cur)
+		if(e.idx == _ss.selected)
 		{
 			onSkill(idx);
 			PE.gui.updateMouse;
-		}
+		}*/
 	}
 
 	void add(Skill s)
 	{
-		auto e = new SkillItem(null, _ss, s, _sc.elemWidth);
-		e.idx = cast(uint)_sc.rows.length;
+		/*auto e = new SkillItem(null, _ss, s, _sc.elemWidth);
+		e.idx = cast(uint)_sc.rows.length;*/
 
-		_sc.add(e, true);
+		//_sc.add(e, true);
 	}
 
 private:
@@ -85,7 +83,7 @@ private:
 	{
 		this()
 		{
-			super(SEL_ON_PRESS);
+			super(null, false);
 		}
 
 		override void select(int idx)
@@ -108,7 +106,7 @@ private:
 
 			if(s.lvl && s.type)
 			{
-				auto a = new Button(this, BTN_PART, MSG_USE);
+				auto a = new Button(this, MSG_USE);
 				a.pos = Vector2s(size.x - a.size.x - 5, size.y - a.size.y - 4);
 
 				a.onClick =
@@ -122,7 +120,7 @@ private:
 
 			if(s.upgradable)
 			{
-				auto a = new Button(this, BTN_PART, MSG_LEARN);
+				auto a = new Button(this, MSG_LEARN);
 				a.pos = Vector2s(size.x - a.size.x - 5 - x, size.y - a.size.y - 4);
 
 				a.onClick =
@@ -137,11 +135,11 @@ private:
 	SkillSelector _ss;
 }
 
-class SkillItem : SelectableItem
+class SkillItem : Selectable
 {
 	this(GUIElement p, Selector s, in Skill sk, ushort w)
 	{
-		super(p, s);
+		super(s);
 
 		{
 			auto e = new SkillIcon(this, sk);
@@ -205,11 +203,49 @@ class TargetSelector : GUIElement
 		super(PE.gui.root);
 
 		size = parent.size;
-		flags = WIN_TOP_MOST | WIN_BACKGROUND;
+		flags = Win.topMost;
 	}
 
 	override void draw(Vector2s p) const
 	{
 		drawQuad(p + pos, size, Color(0, 0, 0, 110));
+	}
+}
+
+class BigTooltip : Tooltip
+{
+	this(string s)
+	{
+		FontInfo fi =
+		{
+			maxWidth: 640
+		};
+
+		toStaticTexts(s, -1, colorBlack, fi).joiner.each!(a => a.attach(this));
+
+		toChildSize;
+		pad(TOOLTIP_PART_SZ.x);
+
+		super();
+	}
+
+	override void draw(Vector2s p) const
+	{
+		auto n = p + pos;
+		auto t = TOOLTIP_PART_SZ;
+
+		drawQuad(n + t, size - t * 2);
+
+		drawImage(TOOLTIP_PART, n, colorWhite, t);
+		drawImage(TOOLTIP_PART, n + Vector2s(size.x - t.x, 0), colorWhite, t, DRAW_MIRROR_H);
+		drawImage(TOOLTIP_PART, n + Vector2s(0, size.y - t.x), colorWhite, t, DRAW_MIRROR_V);
+		drawImage(TOOLTIP_PART, n + size - t, colorWhite, t, DRAW_MIRROR_V | DRAW_MIRROR_H);
+
+		drawImage(TOOLTIP_SPACER, n + Vector2s(t.x, 0), colorWhite, Vector2s(size.x - t.x * 2, t.x));
+		drawImage(TOOLTIP_SPACER, n + Vector2s(0, t.x), colorWhite, Vector2s(size.y - t.x * 2, t.x), DRAW_ROTATE);
+		drawImage(TOOLTIP_SPACER, n + Vector2s(size.x - t.x, t.x), colorWhite, Vector2s(size.y - t.x * 2, t.x), DRAW_ROTATE);
+		drawImage(TOOLTIP_SPACER, n + Vector2s(t.x, size.y - t.x), colorWhite, Vector2s(size.x - t.x * 2, t.x));
+
+		super.draw(p);
 	}
 }

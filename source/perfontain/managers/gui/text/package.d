@@ -5,6 +5,7 @@ import
 		std.conv,
 		std.array,
 		std.regex,
+		std.algorithm,
 
 		perfontain;
 
@@ -13,14 +14,14 @@ auto colorSplit(string s, Color c = colorTransparent)
 {
 	CharColor[] arr;
 
-	void toArr(string s, Color v)
+	void add(string s, Color v)
 	{
 		arr ~= s.map!(a => CharColor(a, v)).array;
 	}
 
 	if(c.a)
 	{
-		toArr(s, c);
+		add(s, c);
 	}
 	else
 	{
@@ -31,44 +32,46 @@ auto colorSplit(string s, Color c = colorTransparent)
 			s = m[2];
 			c = m[1].length ? Color.fromInt((m[1].to!uint(16) << 8) | 255) : colorBlack;
 
-			toArr(s, c);
+			add(s, c);
 		}
 	}
 
 	return arr;
 }
 
-auto toStaticTexts(CharColor[] arr, Vector2s sz, GUIElement delegate() dg, Font f = null, ubyte flags = 0)
+auto toStaticTexts(string s, short height, Color c = colorTransparent, FontInfo fi = FontInfo.init)
 {
-	GUIElement[] res;
+	return toStaticTexts(colorSplit(s, c), height, fi);
+}
 
-	if(!f)
+auto toStaticTexts(CharColor[] arr, short height, FontInfo fi = FontInfo.init)
+{
+	Vector2s pos;
+	GUIStaticText[][] res;
+
+	void add(CharColor[] arr) // TODO: SCROLLED TEXT
 	{
-		f = PE.fonts.base;
+		auto t = new GUIStaticText(null, arr.map!(a => a.c).array.toUTF8);
+		t.pos = pos;
+		t.color = arr[0].color;
+
+		res.back ~= t;
+		pos.x += t.size.x;
 	}
 
-	void add(GUIElement e, CharColor[] arr, ref ushort x)
+	auto f = fi.font ? fi.font : PE.fonts.base;
+
+	foreach(r; f.toLines(arr, fi.maxWidth, height, fi.flags))
 	{
-		auto t = new GUIStaticText(e, arr.map!(a => a.c).array.toUTF8, flags, f);
-
-		t.color = arr[0].col;
-		t.pos.x = x;
-
-		x += t.size.x;
-	}
-
-	foreach(r; f.toLines(arr, sz.x, sz.y, flags))
-	{
-		ushort x;
-		auto e = dg();
+		res.length++;
 
 		if(r.length)
 		{
-			eachGroup!((a, b) => a.col != b.col)(r, (CharColor[] a) => add(e, a, x));
+			eachGroup!((a, b) => a.color != b.color)(r, &add);
+			pos.x = 0;
 		}
 
-		e.size = Vector2s(sz.x, f.height);
-		res ~= e;
+		pos.y += f.height;
 	}
 
 	return res;

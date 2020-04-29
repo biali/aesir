@@ -77,10 +77,10 @@ public import
 				perfontain.filesystem,
 				perfontain.rendertarget,
 
-				ciema,
+				stb.image,
 
-				tt.error,
-				tt.logger;
+				utils.except,
+				utils.logger;
 
 
 alias PE = Engine.instance;
@@ -129,10 +129,7 @@ final class Engine
 		window = new WindowManager;
 		window.create(title);
 
-		//GL_ARB_bindless_texture = false;
-		//GL_ARB_shader_draw_parameters = false;
-
-		log.info2(`[gpu info]`);
+		logger.info2(`[gpu info]`);
 
 		{
 			_glGetString = cast(typeof(_glGetString))load(`glGetString`);
@@ -145,20 +142,23 @@ final class Engine
 					renderer = glGetString(GL_RENDERER).fromStringz.idup,
 					glsl = glGetString(GL_SHADING_LANGUAGE_VERSION).fromStringz.idup;
 
-			log.info3(`opengl vendor: %s`, vendor);
-			log.info3(`opengl version: %s`, version_);
-			log.info3(`opengl renderer: %s`, renderer);
-			log.info3(`opengl sl version: %s`, glsl);
+			logger.info3(`opengl vendor: %s`, vendor);
+			logger.info3(`opengl version: %s`, version_);
+			logger.info3(`opengl renderer: %s`, renderer);
+			logger.info3(`opengl sl version: %s`, glsl);
 
 			debug
 			{}
 			else
 			{
-				configReport(vendor, version_, renderer, glsl);
+				//configReport(vendor, version_, renderer, glsl);
 			}
 
 			hookGL;
 		}
+
+		//GL_ARB_bindless_texture = false;
+		//GL_ARB_shader_draw_parameters = false;
 
 		// can't use bindless without draw parameters
 		GL_ARB_bindless_texture &= GL_ARB_shader_draw_parameters;
@@ -167,11 +167,11 @@ final class Engine
 		{
 			if(mixin(s))
 			{
-				log.info(`%s : supported`, s);
+				logger.info(`%s : supported`, s);
 			}
 			else
 			{
-				log.warning(`%s : unsupported`, s);
+				logger.warning(`%s : unsupported`, s);
 			}
 		}
 
@@ -183,28 +183,27 @@ final class Engine
 
 			if(_aaLevel)
 			{
-				log.info(`anisotropy level = %ux`, _aaLevel);
+				logger.info(`anisotropy level = %ux`, _aaLevel);
 			}
 			else
 			{
-				log.error(`anisotropic filtering is not supported`);
+				logger.error(`anisotropic filtering is not supported`);
 			}
 		}
 
 		if(_msaaLevel)
 		{
-			log.info(`msaa level = %ux`, _msaaLevel);
+			logger.info(`msaa level = %ux`, _msaaLevel);
 		}
 		else
 		{
-			log.error(`msaa is not supported`);
+			logger.error(`msaa is not supported`);
 		}
 
 		_run = true;
-		glEnable(GL_DEPTH_TEST);
 
 		ctors;
-		triggerAspect;
+		onResize(PE.window.size);
 
 		settings.disableUnsupported;
 	}
@@ -213,8 +212,12 @@ final class Engine
 	{
 		while(processWork)
 		{
+			glEnable(GL_DEPTH_TEST);
+
 			shadows.process;
 			scene.draw;
+
+			glDisable(GL_DEPTH_TEST);
 			gui.draw;
 
 			PEwindow.swapBuffers;
@@ -223,8 +226,8 @@ final class Engine
 
 	void quit() { _run = false; }
 
-    GUIManager gui;
-    FontManager fonts;
+	GUIManager gui;
+	FontManager fonts;
 	SceneManager scene;
 	AudioManager audio;
 	TimerManager timers;
@@ -237,19 +240,17 @@ final class Engine
 
 	FileSystem fs;
 
-	// signals
-	Signal!(void, float) onAspect;
-
 	Signal!(void, Vector2s) onMove;
 	Signal!(void, Vector2s) onMoveDelta;
 
-	Signal!(void, uint) onTickDiff;
+	Signal!(void, uint) onTickDelta;
+	Signal!(void, Vector2s) onResize;
 
-	Signal!(bool, ubyte, bool) onButton;
-	Signal!(bool, ubyte) onDoubleClick;
 	Signal!(bool, Vector2s) onWheel;
+	Signal!(bool, ubyte) onDoubleClick;
+	Signal!(bool, ubyte, bool) onButton;
 
-	Signal!(void, uint, bool) onKey;
+	Signal!(bool, SDL_Keycode, bool) onKey;
 package:
 	mixin createCtorsDtors!(fs, settings, window, render, shadows, _samplers, _state, audio, timers, textures, scene, fonts, _objs, gui, hotkeys);
 
@@ -257,11 +258,6 @@ package:
 
 	mixin publicProperty!(uint, `tick`);
 	mixin publicProperty!(uint, `fpsCount`);
-
-	void triggerAspect()
-	{
-		onAspect(float(window._size.x) / window._size.y);
-	}
 
 	bool processWork()
 	{
@@ -274,7 +270,7 @@ package:
 
 		if(_diff)
 		{
-			onTickDiff(_diff);
+			onTickDelta(_diff);
 		}
 
 		window.processEvents;
@@ -292,7 +288,7 @@ package:
 
 				//window.title = format(`Perfontain Engine: %u fps`, _fpsCount);
 
-				debug
+				//debug
 				{
 					showDebug;
 				}
@@ -322,7 +318,6 @@ package:
 		else
 		{
 			_debugInfo = new GUIQuad(PE.gui.root, colorWhite);
-			_debugInfo.pos = Vector2s(20);
 		}
 
 		string s;
@@ -339,6 +334,8 @@ package:
 
 		_debugInfo.toChildSize;
 		_debugInfo.size.x += 4;
+
+		_debugInfo.pos = Vector2s(window.size.x - _debugInfo.size.x - 20, 20);
 	}
 
 	GUIQuad _debugInfo;

@@ -1,10 +1,7 @@
 module rocl.rofs;
 
 import
-		std.path,
-		std.file,
-		std.array,
-		std.algorithm,
+		std,
 
 		perfontain,
 
@@ -15,15 +12,31 @@ import
 		ro.conf,
 
 		rocl.game,
-		rocl.opti,
 		rocl.paths,
 
-		tt.error,
-		tt.logger;
+		utils.except,
+		utils.logger,
+
+		utils.miniz : Zip;
 
 
 final class RoFileSystem : FileSystem
 {
+	this()
+	{
+		debug
+		{}
+		else
+		{
+			_zip = new Zip(RES_FILE, false);
+		}
+	}
+
+	~this()
+	{
+		_zip.destroy;
+	}
+
 	auto grfs()
 	{
 		if(!_arr.length)
@@ -43,18 +56,14 @@ protected:
 		{
 			return super.doRead(`tmp/` ~ name, dg);
 		}
-		catch {}
+		catch(Exception)
+		{}
 
 		debug
 		{}
 		else
 		{
-			if(!_op)
-			{
-				_op = new Opti(OPTI_FILE);
-			}
-
-			if(auto data = _op.get(name))
+			if(auto data = _zip.get(name).ifThrown(null))
 			{
 				return dg(data, false);
 			}
@@ -101,6 +110,6 @@ protected:
 	}
 
 private:
-	RC!Opti _op;
+	Zip _zip;
 	RCArray!Grf _arr;
 }

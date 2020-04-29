@@ -10,6 +10,7 @@ import
 
 		ro.conv.gui,
 
+		rocl,
 		rocl.gui,
 		rocl.game;
 
@@ -18,10 +19,12 @@ public import
 				rocl.controls.base,
 				rocl.controls.bars,
 				rocl.controls.icon,
+				rocl.controls.menu,
 				rocl.controls.shops,
 				rocl.controls.status,
 				rocl.controls.skills,
 				rocl.controls.hotkeys,
+				rocl.controls.trading,
 				rocl.controls.settings,
 				rocl.controls.creation,
 				rocl.controls.charinfo,
@@ -34,14 +37,12 @@ enum
 	WPOS_SPACING	= 18,
 }
 
+//deprecated
 class WinBasic : GUIElement
 {
 	this(Vector2s sz, string s, bool bottom = true)
 	{
-		super(PE.gui.root);
-
-		size = sz;
-		flags = WIN_MOVEABLE;
+		super(PE.gui.root, size, Win.moveable | Win.captureFocus);
 
 		{
 			auto t = new GUIStaticText(this, s);
@@ -94,4 +95,112 @@ class WinBasic : GUIElement
 
 private:
 	bool _bottom;
+}
+
+class WinBasic2 : GUIElement
+{
+	this(string s, string n)
+	{
+		super(PE.gui.root, Vector2s.init, Win.moveable | Win.captureFocus, n);
+
+		new GUIElement(this);
+		new GUIQuad(this, colorWhite);
+		new GUIElement(this);
+
+		_title = s;
+	}
+
+	void adjust()
+	{
+		main.toChildSize;
+		main.pad(4);
+
+		auto	bt = childs[0],
+				bb = childs[2];
+
+		bt.size.x = bb.size.x = main.size.x;
+
+		{
+			make(bt, WIN_TOP, WIN_TOP_SPACER);
+
+			auto e = new GUIImage(bt, WIN_PART);
+			e.pos = Vector2s(4);
+
+			auto t = new GUIStaticText(bt, _title);
+			t.move(POS_MIN, WPOS_START, POS_CENTER);
+		}
+
+		main.moveY(bt, POS_ABOVE);
+
+		{
+			make(bb, WIN_BOTTOM, WIN_BOTTOM_SPACER);
+			bb.moveY(main, POS_ABOVE);
+		}
+
+		new GUIElement(bt, bt.size);
+		new GUIElement(bb, bb.size);
+
+		toChildSize;
+		tryPose;
+	}
+
+protected:
+	mixin MakeChildRef!(GUIElement, `top`, 0, -1);
+	mixin MakeChildRef!(GUIElement, `main`, 1);
+	mixin MakeChildRef!(GUIElement, `bottom`, 2, -1);
+private:
+	void make(GUIElement e, ushort id, ushort spacer)
+	{
+		e.childs.clear;
+
+		auto l = new GUIImage(e, id);
+		auto r = new GUIImage(e, id, DRAW_MIRROR_H);
+		auto q = new GUIImage(e, spacer);
+
+		r.moveX(POS_MAX);
+		q.poseBetween(l, r);
+
+		e.toChildSize;
+	}
+
+	string _title;
+}
+
+final class WinInfo : WinBasic2
+{
+	this(string s, bool withCancel = false)
+	{
+		super(MSG_INFO, `info`);
+
+		{
+			auto e = new ScrolledText(main, Vector2s(280, 4));
+
+			e.autoBottom = false;
+			e.add(s);
+		}
+
+		adjust;
+		center;
+
+		new Button(bottom, MSG_OK);
+		ok.moveY(bottom, POS_CENTER);
+
+		if(withCancel)
+		{
+			new Button(bottom, MSG_CANCEL);
+			cancel.move(bottom, POS_MAX, -5, bottom, POS_CENTER);
+
+			ok.moveX(cancel, POS_BELOW, -5);
+		}
+		else
+		{
+			ok.onClick = { deattach; };
+			ok.moveX(bottom, POS_MAX, -5);
+		}
+
+		ok.focus;
+	}
+
+	mixin MakeChildRef!(Button, `ok`, 2, 0);
+	mixin MakeChildRef!(Button, `cancel`, 2, 1);
 }

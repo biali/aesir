@@ -16,26 +16,115 @@ class GUIQuad : GUIElement
 	this(GUIElement p, Color c)
 	{
 		super(p);
-
-		_c = c;
+		color = c;
 	}
 
 	override void draw(Vector2s p) const
 	{
-		drawQuad(p + pos, size, _c);
+		drawQuad(p + pos, size, color);
 
 		super.draw(p);
 	}
 
+	Color color;
+}
+
+class Table : GUIElement
+{
+	this(GUIElement p, Vector2s sz, ushort pad = 0)
+	{
+		super(p);
+
+		_sz = sz;
+		_pad = pad;
+	}
+
+	void add(GUIElement e)
+	{
+		_elems ~= e;
+		update;
+	}
+
+	void remove(GUIElement e)
+	{
+		e.deattach;
+		_elems.remove(e);
+
+		_pos = min(_pos, maxIndex);
+		update;
+	}
+
+	void pose(uint n)
+	{
+		_pos = n;
+		update;
+	}
+
+	const rows()
+	{
+		return (cast(uint)_elems.length + _sz.x - 1) / _sz.x;
+	}
+
+	const maxIndex()
+	{
+		return uint(max(0, int(rows) - _sz.y));
+	}
+
+	inout elements()
+	{
+		return _elems[];
+	}
+
 private:
-	Color _c;
+	void update()
+	{
+		elements.each!(a => a.deattach);
+		childs.clear;
+
+		auto sizes = _sz.x
+							.iota
+							.map!(a => elements.drop(a).stride(_sz.x).calcSize)
+							.array;
+
+		auto xoff = _sz.x
+							.iota
+							.map!(a => sizes[0..a].map!(b => b.x).sum + a * _pad)
+							.array;
+
+		auto sy = sizes
+						.map!(a => a.y)
+						.fold!max;
+
+		auto arr = _elems[_pos * _sz.x..$][0.._sz.y ? min($, _sz.x * _sz.y) : $];
+
+		foreach(i, c; arr)
+		{
+			auto	x = i % _sz.x,
+					y = i / _sz.x;
+
+			auto e = new GUIElement(this, Vector2s(sizes[x].x, sy));
+
+			e.pos = Vector2s(xoff[x], (e.size.y + _pad) * y);
+			c.attach(e);
+		}
+
+		toChildSize;
+	}
+
+	mixin publicProperty!(uint, `pos`);
+	mixin publicProperty!(Vector2s, `sz`);
+
+	RCArray!GUIElement _elems;
+	ushort _pad;
 }
 
 class GUIImage : GUIElement
 {
-	this(GUIElement parent, uint id, ubyte draw = 0, MeshHolder h = null)
+	this(GUIElement p, uint id, ubyte mode = 0, MeshHolder h = null)
 	{
-		_draw = draw;
+		super(p);
+
+		_mode = mode;
 		_id = cast(ushort)id;
 
 		if(h)
@@ -44,59 +133,57 @@ class GUIImage : GUIElement
 		}
 		else
 		{
-			size = PE.gui.sizes[_id];
+			size = sizeFor(_id);
 
-			if(draw & DRAW_ROTATE)
+			if(mode & DRAW_ROTATE)
 			{
 				swap(size.x, size.y);
 			}
 		}
+	}
 
-		super(parent);
+	void action(void delegate() dg)
+	{
+		_dg = dg;
+		flags.captureFocus = !!dg;
 	}
 
 	override void draw(Vector2s p) const
 	{
-		drawImage(_holder ? _holder : PE.gui.holder, _id, p + pos, colorWhite, Vector2s.init, _draw);
+		drawImage(_holder ? _holder : PE.gui.holder, _id, p + pos, color, Vector2s.init, _mode);
 	}
 
-	override void onPress(bool b)
+	override void onPress(Vector2s, bool v)
 	{
-		if(b && onClick)
+		if(_dg && v)
 		{
-			onClick();
+			_dg();
 		}
 	}
 
-	void delegate() onClick;
+	auto color = colorWhite;
 protected:
-	ushort _id;
-	ubyte _draw;
-
+	void delegate() _dg;
 	RC!MeshHolder _holder;
+
+	ushort _id;
+	ubyte _mode;
 }
 
-final class CheckBox : GUIElement
+final class CheckBox : GUIImage
 {
-	this(GUIElement p, ushort id, Vector2s sz, bool ch = false)
+	this(GUIElement p, bool ch = false)
 	{
-		super(p);
+		super(p, ch ? CHECKBOX_CHECKED : CHECKBOX);
 
-		_id = id;
-
-		size = sz;
 		checked = ch;
-	}
-
-	override void draw(Vector2s p) const
-	{
-		drawImage(_id + checked, p + pos);
+		flags.captureFocus = true;
 	}
 
 	bool checked;
 	void delegate(bool) onChange;
 protected:
-	override void onPress(bool st)
+	override void onPress(Vector2s, bool st)
 	{
 		if(st)
 		{
@@ -106,11 +193,10 @@ protected:
 			{
 				onChange(checked);
 			}
+
+			_id = checked ? CHECKBOX_CHECKED : CHECKBOX;
 		}
 	}
-
-private:
-	ushort _id;
 }
 
 class Underlined : GUIElement
@@ -138,9 +224,7 @@ class GUIEditText : GUIElement
 {
 	this(GUIElement e)
 	{
-		super(e);
-
-		size.y = PE.fonts.base.height;
+		super(e, Vector2s(0, PE.fonts.base.height), Win.enabled | Win.captureFocus);
 	}
 
 	override void draw(Vector2s p) const
@@ -154,7 +238,7 @@ class GUIEditText : GUIElement
 			p.x += _w;
 		}
 
-		if(flags & WIN_HAS_INPUT && (PE.tick - _tick) % 1000 < 500)
+		if(flags.enabled && flags.hasInput && (PE.tick - _tick) % 1000 < 500)
 		{
 			drawQuad(p, Vector2s(1, size.y), colorBlack);
 		}
@@ -171,7 +255,7 @@ class GUIEditText : GUIElement
 
 	override void onKey(uint k, bool st)
 	{
-		if(k == SDLK_BACKSPACE && st && _text.length)
+		if(flags.enabled && k == SDLK_BACKSPACE && st && _text.length)
 		{
 			_text.popBack;
 			update;
@@ -180,8 +264,11 @@ class GUIEditText : GUIElement
 
 	override void onText(string s)
 	{
-		_text ~= s;
-		update;
+		if(flags.enabled && (!onChar || onChar(s)))
+		{
+			_text ~= s;
+			update;
+		}
 	}
 
 	@property value()
@@ -195,7 +282,8 @@ class GUIEditText : GUIElement
 		update;
 	}
 
-	bool delegate(string) onEnter;
+	bool delegate(string)	onChar,
+							onEnter;
 protected:
 	override void onFocus(bool b)
 	{
@@ -217,7 +305,7 @@ protected:
 			auto x = size.x - 1;
 			auto v = max(float(im.w) - x, 0) / im.w;
 
-			_ob = PEobjs.makeHolder(im, v)[0];
+			_ob = PEobjs.makeHolder(im, v);
 			_w = cast(ushort)min(im.w, x);
 		}
 	}
@@ -225,57 +313,35 @@ protected:
 	string _text;
 private:
 	RC!MeshHolder _ob;
-
-	ushort _w;
 	uint _tick;
+	ushort _w;
 }
 
-class GUIStaticText : GUIElement
+class GUIStaticText : GUIImage
 {
-	this(GUIElement p, string text, ubyte font = 0, Font f = null)
+	this(GUIElement p, string text, FontInfo fi = FontInfo.init, ubyte mode = 0)
 	{
-		super(p);
+		//super(p);
+		auto e = fi.font ? fi.font : PE.fonts.base;
 
-		_font = font;
-		_text = text;
-		_f = f ? f : PE.fonts.base;
+		auto arr = e.toLines(text, fi.maxWidth, 1, fi.flags);
+		assert(arr.length == 1);
 
-		flags = WIN_BACKGROUND;
-		create;
+		auto m = PEobjs.makeHolder(e.render(arr[0], fi.flags));
+
+		super(p, 0, mode, m);
+		//new GUIImage(this, 0, mode, m).size = m.size;
+
+		color = colorBlack;
+		size = Vector2s(m.size.x, e.height);
 	}
 
-	override void onShow(bool b)
-	{
-		if(b)
-		{
-			create;
-		}
-		else
-		{
-			_ob = null;
-		}
+	//auto color = colorBlack;
+}
 
-		//log(`text %s - %s`, b, _text);
-	}
-
-	override void draw(Vector2s p) const
-	{
-		drawImage(_ob, 0, p + pos, color);
-	}
-
-	Color color = colorBlack;
-private:
-	void create()
-	{
-		auto v = PEobjs.makeHolder(_f.render(_text, _font));
-
-		_ob = v[0];
-		size = v[1];
-	}
-
-	RC!Font _f;
-	RC!MeshHolder _ob;
-
-	ubyte _font;
-	string _text;
+struct FontInfo // TODO: REPLACE OTHER USAGES
+{
+	Font font;
+	short maxWidth = short.max;
+	ubyte flags;
 }

@@ -1,9 +1,7 @@
 module rocl.controls.charselect;
 
 import
-		std.conv,
-		std.range,
-		std.algorithm,
+		std,
 
 		perfontain,
 		perfontain.opengl,
@@ -19,103 +17,97 @@ import
 
 final:
 
-class WinCharSelect : WinBasic
+class WinCharSelect : WinBasic2
 {
 	this(in PkCharData *c)
 	{
-		name = `char_select`;
-
-		super(Vector2s(340, 200), MSG_CHAR_SELECT);
+		super(MSG_CHAR_SELECT, `char_select`);
 
 		{
 			auto v = PE.window.size;
 			pos = Vector2s(v.x * 2 / 3 - size.x / 2, v.y / 3 - size.y);
 		}
 
-		string[2][] stats;
-
-		void stat(T)(string name, T v)
 		{
-			auto s = v.to!string;
+			string[2][] stats;
 
-			static if(is(T : int))
+			void stat(T)(string name, T v)
 			{
-				s = cast(string)s.as!ubyte.retro.chunks(3).join(' ').retro.array;
+				auto s = v.to!string;
+
+				static if(isIntegral!T)
+				{
+					s = s.as!ubyte.retro.chunks(3).join(' ').retro.array.assumeUTF;
+				}
+
+				stats ~= [ name, s ];
 			}
 
-			stats ~= [ name, s ];
+			stat(`Name`, c.name.charsToString);
+			stat(`STR`, c.str);
+
+			stat(`Job`, `???`);
+			stat(`AGI`, c.agi);
+
+			stat(`Lv.`, c.baseLvl);
+			stat(`VIT`, c.vit);
+
+			stat(`EXP`, c.baseExp);
+			stat(`INT`, c.int_);
+
+			stat(`HP`, c.hp);
+			stat(`DEX`, c.dex);
+
+			stat(`SP`, c.sp);
+			stat(`LUK`, c.luk);
+
+			auto t = new Table(main, Vector2s(2, 0), 2);
+
+			stats.each!(a => t.add(new StatInfo(null, a.front, a.back)));
 		}
 
-		stat(`Name`, c.name.charsToString);
-		stat(`Job`, `???`);
-		stat(`Lv.`, c.baseLvl);
-		stat(`EXP`, c.baseExp);
-		stat(`HP`, c.hp);
-		stat(`SP`, c.sp);
-
-		stat(`STR`, c.str);
-		stat(`AGI`, c.agi);
-		stat(`VIT`, c.vit);
-		stat(`INT`, c.int_);
-		stat(`DEX`, c.dex);
-		stat(`LUK`, c.luk);
-
-		foreach(i, s; stats)
-		{
-			auto w = new StatInfo(this, s.front, s.back);
-
-			w.pos = Vector2s(20, 30 + (w.size.y + 2) * (i % 6));
-
-			if(i >= 6)
-			{
-				w.pos.x += w.size.x + 2;
-			}
-		}
+		adjust;
 
 		{
-			auto b = new Button(this, BTN_PART, MSG_ENTER);
+			auto b = new Button(bottom, MSG_ENTER, &RO.action.onCharSelected);
 
-			b.pos = Vector2s(4, size.y - b.size.y - 4);
-			b.onClick = &RO.action.onCharSelected;
-
+			b.move(POS_MIN, 4, POS_CENTER);
 			b.focus;
 		}
 
 		{
-			auto b = new Button(this, BTN_PART, MSG_CREATE);
-
-			b.pos = Vector2s(size.x - b.size.x - 4, size.y - b.size.y - 4);
-			b.onClick = &RO.action.onCharCreate;
+			auto b = new Button(bottom, MSG_CREATE, &RO.action.onCharCreate);
+			b.move(POS_MAX, -4, POS_CENTER);
 		}
 	}
 }
 
 class StatInfo : GUIElement
 {
-	this(WinCharSelect w, string name, string value)
+	this(GUIElement p, string name, string value)
 	{
-		super(w);
-
-		size = Vector2s(155, PE.fonts.base.height);
+		super(p, Vector2s(155, PE.fonts.base.height));
 
 		{
-			auto e = new GUIStaticText(this, name, FONT_BOLD);
-			e.pos.x = 3;
+			auto q = new GUIQuad(this, Color(200, 200, 230, 200));
+			q.size = Vector2s(48, size.y);
+
+			q = new GUIQuad(this, Color(240, 240, 240, 200));
+			q.size = Vector2s(size.x - 48, size.y);
+			q.moveX(POS_MAX);
 		}
 
 		{
-			auto e = new GUIStaticText(this, value);
+			FontInfo fi =
+			{
+				flags: FONT_BOLD
+			};
+
+			auto e = new GUIStaticText(this, name, fi);
+			e.pos.x = 3;
+
+			e = new GUIStaticText(this, value);
 			e.pos.x = 51;
 		}
-	}
-
-	override void draw(Vector2s p) const
-	{
-		auto np = p + pos;
-
-		drawQuad(np, Vector2s(48, size.y), Color(200, 200, 230, 200));
-		drawQuad(np + Vector2s(48, 0), Vector2s(size.x - 48, size.y), Color(240, 240, 240, 200));
-
-		super.draw(p);
 	}
 }

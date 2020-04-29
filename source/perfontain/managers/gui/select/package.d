@@ -1,48 +1,49 @@
 module perfontain.managers.gui.select;
 
 import
+		std,
+
 		perfontain;
 
 public import
-				perfontain.managers.gui.select.box;
+				perfontain.managers.gui.select.box,
+				perfontain.managers.gui.select.popup;
 
 
-enum : ubyte
+class Selector : GUIElement
 {
-	SEL_ON_PRESS = 1,
-}
-
-class Selector
-{
-	this(ubyte flags = 0)
+	this(GUIElement p, bool followMouse = true)
 	{
-		_flags = flags;
+		super(p);
+		_followMouse = followMouse;
 	}
 
 	void select(int) {}
 private:
-	mixin publicProperty!(int, `cur`, `-1`);
+	mixin publicProperty!(int, `selected`, `-1`);
 
-	void doSelect(int v)
+	void doSelect(int idx)
 	{
-		select(_cur = v);
+		select(_selected = idx);
 	}
 
-	ubyte _flags;
+	bool _followMouse;
 }
 
-class SelectableItem : GUIElement
+class Selectable : GUIElement
 {
-	this(GUIElement p, Selector s)
+	this(Selector p, int n = 0)
 	{
-		_s = s;
+		super(p, Vector2s.init, Win.captureFocus);
 
-		super(p);
+		idx = n;
 	}
 
 	override void draw(Vector2s p) const
 	{
-		if(_s._flags & SEL_ON_PRESS ? _s.cur == idx : flags & WIN_HAS_MOUSE)
+		auto s = selector;
+
+		if(s._followMouse ? flags.hasMouse : s.selected == idx)
 		{
 			drawQuad(p + pos, size, Color(0xa3, 0xdb, 0xfb, 0xff));
 		}
@@ -50,15 +51,18 @@ class SelectableItem : GUIElement
 		super.draw(p);
 	}
 
-	override void onPress(bool st)
+	override void onPress(Vector2s, bool v)
 	{
-		if(flags & WIN_HAS_MOUSE && !st)
+		if(flags.hasMouse && !v)
 		{
-			_s.doSelect(idx);
+			selector.doSelect(idx);
 		}
 	}
 
 	int idx;
 private:
-	Selector _s;
+	inout selector()
+	{
+		return firstParent!Selector;
+	}
 }

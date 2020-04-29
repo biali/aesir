@@ -1,18 +1,31 @@
 module perfontain.program;
 
 import
-		std.range,
-		std.string,
-		std.traits,
-		std.exception,
+		std,
 
 		core.bitop,
 
 		perfontain.opengl,
 		perfontain,
 
-		tt.error;
+		utils.except,
+		utils.logger;
 
+
+enum
+{
+	PROG_DATA_MODEL		= 1,
+	PROG_DATA_COLOR		= 2,
+	PROG_DATA_NORMAL	= 4,
+	PROG_DATA_LIGHTS	= 8,
+	PROG_DATA_SM_MAT	= 16,
+}
+
+struct Attrib
+{
+	uint	type,
+			size;
+}
 
 final class Program : RCounted
 {
@@ -31,6 +44,25 @@ final class Program : RCounted
 		{
 			glDetachShader(_id, s.id);
 		}
+
+		parseAttribs;
+
+		static immutable Attrs =
+		[
+			tuple(`pe_transforms.pe_shadow_matrix`, PROG_DATA_SM_MAT),
+			tuple(`pe_transforms.transforms[0].model`, PROG_DATA_MODEL),
+			tuple(`pe_transforms.transforms[0].color`, PROG_DATA_COLOR),
+			tuple(`pe_transforms.transforms[0].normal`, PROG_DATA_NORMAL),
+			tuple(`pe_transforms.transforms[0].lightStart`, PROG_DATA_LIGHTS),
+		];
+
+		foreach(a; Attrs)
+		{
+			if(a[0] in _attribs)
+			{
+				_flags |= a[1];
+			}
+		}
 	}
 
 	~this()
@@ -39,6 +71,8 @@ final class Program : RCounted
 
 		foreach(u; _unis.values.filter!(a => a && a.idx >= 0))
 		{
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, u.idx, 0);
+
 			u.data = null;
 			btr(&_ssbo, u.idx);
 		}
@@ -56,7 +90,7 @@ final class Program : RCounted
 		bind(0);
 	}
 
-	void send(T)(string name, ref in T value)
+	void send(T)(string name, auto ref in T value)
 	{
 		auto s = locationOf(name);
 
@@ -71,7 +105,7 @@ final class Program : RCounted
 		}
 		else static if(is(T == ulong))
 		{
-			glProgramUniform2uiv(_id, s.loc, 1, cast(uint *)&value);
+			glProgramUniform2uiv(_id, s.loc, 1, cast(uint*)&value);
 		}
 		else static if(is(T == Vector3))
 		{
@@ -105,11 +139,11 @@ final class Program : RCounted
 			}
 
 			s.data.realloc(cast(uint)data.length, data.ptr);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, s.idx, s.data.id);
 
 			if(b)
 			{
 				glShaderStorageBlockBinding(_id, s.loc, s.idx);
-				glBindBufferBase(GL_SHADER_STORAGE_BUFFER, s.idx, s.data.id);
 			}
 		}
 	}
@@ -125,9 +159,91 @@ final class Program : RCounted
 	}
 
 private:
+	mixin publicProperty!(ubyte, `flags`);
+
+	void parseAttribs()
+	{
+		enum Attribs =
+		[
+			tuple(GL_ACTIVE_UNIFORMS, GL_ACTIVE_UNIFORM_MAX_LENGTH, `glGetActiveUniform`),
+			tuple(GL_ACTIVE_ATTRIBUTES, GL_ACTIVE_ATTRIBUTE_MAX_LENGTH, `glGetActiveAttrib`),
+		];
+
+		static foreach(e; Attribs)
+		{
+			{
+				int		cnt,
+						nameLen;
+
+				glGetProgramiv(_id, e[0], &cnt);
+				glGetProgramiv(_id, e[1], &nameLen);
+
+				auto name = new char[nameLen];
+
+				foreach(i; 0..cnt)
+				{
+					int size;
+					uint type;
+
+					mixin(e[2] ~ `(_id, i, cast(uint)name.length, cast(uint*)&nameLen, &size, &type, name.ptr);`);
+
+					_attribs[name[0..nameLen].idup] = Attrib(type, size);
+				}
+			}
+		}
+
+		{
+			int cnt;
+			glGetProgramInterfaceiv(_id, GL_SHADER_STORAGE_BLOCK, GL_ACTIVE_RESOURCES, &cnt);
+
+			foreach(idx; 0..cnt)
+			{
+				parseBlock(idx);
+			}
+		}
+
+		_attribs.rehash;
+	}
+
+	void parseBlock(uint idx)
+	{
+		int		cnt,
+				nameLen;
+
+		glGetProgramResourceiv(_id, GL_SHADER_STORAGE_BLOCK, idx, 1,  [ GL_NUM_ACTIVE_VARIABLES ].ptr, 1, null, &cnt);
+
+		if(!cnt)
+		{
+			return;
+		}
+
+		glGetProgramResourceiv(_id, GL_SHADER_STORAGE_BLOCK, idx, 1,  [ GL_NAME_LENGTH ].ptr, 1, null, &nameLen);
+
+		auto block = new char[nameLen];
+		glGetProgramResourceName(_id, GL_SHADER_STORAGE_BLOCK, idx, nameLen, cast(uint*)&nameLen, block.ptr);
+		block.length = nameLen;
+
+		auto vars = new int[cnt];
+		glGetProgramResourceiv(_id, GL_SHADER_STORAGE_BLOCK, idx, 1, [ GL_ACTIVE_VARIABLES ].ptr, cnt, null, vars.ptr);
+
+		foreach(var; vars)
+		{
+			enum Query = [ GL_NAME_LENGTH, GL_TYPE, GL_ARRAY_SIZE ];
+			enum N = cast(uint)Query.length;
+
+			int[N] arr;
+			glGetProgramResourceiv(_id, GL_BUFFER_VARIABLE, var, N, Query.ptr, N, null, arr.ptr);
+
+			auto varName = new char[arr[0]];
+			glGetProgramResourceName(_id, GL_BUFFER_VARIABLE, var, arr[0], cast(uint*)&nameLen, varName.ptr);
+
+			_attribs[format(`%s.%s`, block, varName[0..nameLen])] = Attrib(arr[1], arr[2]);
+		}
+	}
+
 	static bind(uint id)
 	{
-		if(set(PEstate._prog, id))
+		//if(set(PEstate._prog, id))
 		{
 			glUseProgram(id);
 		}
@@ -147,7 +263,7 @@ private:
 
 		if(loc < 0)
 		{
-			log.warning("can't get %s location for `%s' variable", ssb ? `SSBO` : `uniform`, name);
+			logger.warning("can't get %s location for `%s' variable", ssb ? `SSBO` : `uniform`, name);
 		}
 		else
 		{
@@ -184,5 +300,7 @@ private:
 	__gshared size_t _ssbo;
 
 	uint _id;
-	UniformData *[string] _unis;
+
+	Attrib[string] _attribs;
+	UniformData*[string] _unis;
 }

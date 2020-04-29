@@ -16,13 +16,11 @@ import
 		rocl.controls;
 
 
-final class WinSettings : WinBasic
+final class WinSettings : WinBasic2
 {
 	this(bool viewer = false)
 	{
-		name = `settings`;
-
-		super(Vector2s(300, 250), MSG_SETTINGS);
+		super(MSG_SETTINGS, `settings`);
 
 		if(pos.x < 0)
 		{
@@ -31,8 +29,7 @@ final class WinSettings : WinBasic
 
 		struct S
 		{
-			string
-					caption,
+			string	caption,
 					var;
 
 			string[] values;
@@ -53,21 +50,14 @@ final class WinSettings : WinBasic
 			S(`MSG_VSYNC`, `PE.settings.vsync`),
 		];
 
-		ushort w;
-		auto sp = 22;
-
-		foreach(i, c; aliasSeqOf!Arr)
-		{
-			auto e = new GUIStaticText(this, mixin(c.caption));
-			e.pos = Vector2s(WPOS_START, (i + 1) * sp + (sp - e.size.y) / 2);
-
-			w = max(w, e.size.x);
-		}
+		auto t = new Table(main, Vector2s(2, 0), 2);
 
 		foreach(i, c; aliasSeqOf!Arr)
 		{
 			if(mixin(c.cond))
 			{
+				t.add(new GUIStaticText(null, mixin(c.caption)));
+
 				static if(c.values)
 				{
 					GUIElement[] arr;
@@ -77,12 +67,11 @@ final class WinSettings : WinBasic
 						arr ~= new GUIStaticText(null, mixin(u));
 					}
 
-					auto k = arr.map!(a => a.size.x).fold!max;
-					auto e = new SelectBox(this, arr, SELECT_ARROW, SCROLL_ARROW, cast(ushort)(k + 25), mixin(c.var));
+					auto e = new SelectBox(null, arr, mixin(c.var));
 				}
 				else
 				{
-					auto e = new CheckBox(this, CHECKBOX, CHECKBOX_SZ, mixin(c.var));
+					auto e = new CheckBox(null, mixin(c.var));
 				}
 
 				e.onChange = (a)
@@ -90,9 +79,20 @@ final class WinSettings : WinBasic
 					mixin(c.var ~ `= cast(typeof( ` ~ c.var ~ `))a;`);
 				};
 
-				e.pos = Vector2s(WPOS_START + w + 5, (i + 1) * sp + (sp - e.size.y + 1) / 2);
+				t.add(e);
 			}
 		}
+
+		t.childs.each!(a => a.childs[0].moveY(POS_CENTER));
+
+		{
+			auto arr = t.childs[].map!(a => a.childs.front).filter!(a => cast(SelectBox)a);
+			auto w = arr.calcSize(false).x;
+
+			arr.each!((a) { a.size.x = w; a.onResize; });
+		}
+
+		adjust;
 
 		if(viewer)
 		{
@@ -108,20 +108,39 @@ final class WinSettings : WinBasic
 														.uniq
 														.array;
 
-			foreach(n; maps)
+			if(maps.length)
 			{
-				arr ~= new GUIStaticText(null, n);
+				foreach(n; maps)
+				{
+					arr ~= new GUIStaticText(null, n);
+				}
+
+				auto e = new SelectBox(bottom, arr, cast(short)maps.countUntil(`prontera`));
+
+				e.onChange = (a)
+				{
+					try
+					{
+						ROres.load(maps[a]);
+					}
+					catch(Exception e)
+					{
+						e.logger;
+					}
+				};
+
+				e.move(POS_MIN, 4, POS_CENTER);
 			}
-
-			auto k = arr.map!(a => a.size.x).fold!max;
-			auto e = new SelectBox(this, arr, SELECT_ARROW, SCROLL_ARROW, cast(ushort)(k + 25), cast(short)maps.countUntil(`prontera`));
-
-			e.onChange = (a)
-			{
-				try ROres.load(maps[a]); catch(Exception e) e.log;
-			};
-
-			e.pos = Vector2s(WPOS_START, size.y - WIN_BOTTOM_SZ.y - e.size.y - 2);
 		}
+		else
+		{
+			auto e = new Button(bottom, MSG_HOTKEYS, () => RO.gui.createHotkeySettings); // TODO: DELEGATE
+			e.move(POS_MIN, 4, POS_CENTER);
+		}
+	}
+
+	override void poseDefault()
+	{
+		center;
 	}
 }

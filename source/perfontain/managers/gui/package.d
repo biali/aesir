@@ -12,7 +12,7 @@ import
 		std.encoding,
 		std.algorithm,
 
-		ciema,
+		stb.image,
 
 		perfontain,
 
@@ -26,32 +26,29 @@ import
 public import
 				perfontain.managers.gui.tab,
 				perfontain.managers.gui.text,
+				perfontain.managers.gui.misc,
 				perfontain.managers.gui.basic,
 				perfontain.managers.gui.scroll,
 				perfontain.managers.gui.select,
-				perfontain.managers.gui.element;
+				perfontain.managers.gui.images,
+				perfontain.managers.gui.element,
+				perfontain.managers.gui.tooltip;
 
 
 final class GUIManager
 {
 	this()
 	{
-		// shaders
 		_prog = ProgramCreator(`gui`).create;
 
-		// events
+		PE.onKey.permanent(&onKey);
 		PE.onMove.permanent(&onMove);
 		PE.onWheel.permanent(&onWheel);
 		PE.onButton.permanent(&onButton);
-		PE.onKey.permanent(&onKey);
+		PE.onResize.permanent(&onResize);
 		PE.onDoubleClick.permanent(&onDoubleClick);
 
-		// root
-		root = new GUIElement(null);
-		root.size = PE.window.size;
-
-		// misc
-		_moveSub.x = -1;
+		root = new GUIElement(null, PE.window.size);
 	}
 
 	@property current()
@@ -66,17 +63,15 @@ final class GUIManager
 
 	void draw()
 	{
-		if(root)
-		{
-			auto sz = PEwindow._size;
-			auto m = Matrix4.makeOrthogonal(0, sz.x, sz.y, 0, 1, -1); // TODO: TO REASPECT
+		alias F = (a, b) => a.flags.topMost < b.flags.topMost;
 
-			root.childs[].sort!((a, b) => (a.flags & WIN_TOP_MOST) < (b.flags & WIN_TOP_MOST), SwapStrategy.stable);
-			root.draw(Vector2s.init);
+		root.childs[].sort!(F, SwapStrategy.stable);
+		root.draw(Vector2s.init);
 
-			PE.render.doDraw(_prog, RENDER_GUI, m, null, false);
-		}
+		PE.render.doDraw(_prog, RENDER_GUI, _proj, null, false);
 	}
+
+	Signal!(void, GUIElement) onCurrentChanged;
 
 	RC!GUIElement root;
 	RC!MeshHolder holder;
@@ -88,7 +83,7 @@ package:
 		if(_cur is e)
 		{
 			_cur.onHover(false);
-			_cur = null;
+			onCurrentChanged(_cur = null);
 		}
 
 		if(_focus)
@@ -121,26 +116,27 @@ package:
 		if(_inp)
 		{
 			_text = null;
-			_inp.flags &= ~WIN_HAS_INPUT;
+			_inp.flags.hasInput = false;
 		}
 
 		if(e)
 		{
-			e.flags |= WIN_HAS_INPUT;
+			e.flags.hasInput = true;
 			_text = new TextInput(&e.onText);
 		}
 
 		_inp = e;
 	}
 
-	void doFocus(GUIElement e)
+	void doFocus(GUIElement e) // TODO: ELEMENT REMOVES PARENT OR CHILD ???
 	{
 		if(_focus is e)
 		{
 			return;
 		}
 
-		GUIElement[16] o, n;
+		GUIElement[16]	o,
+						n;
 
 		if(_focus)
 		{
@@ -160,20 +156,12 @@ package:
 		so.reverse();
 		sn.reverse();
 
-		auto v = commonPrefix!((a, b) => a is b)(so, sn).count;
-
 		if(sn.length)
 		{
-			auto w = sn[0];
-
-			with(root)
-			{
-				auto arr = childs[];
-
-				arr.remove(arr.countUntil!(a => a is w));
-				arr[$ - 1] = w;
-			}
+			sn[0].bringToTop;
 		}
+
+		auto v = commonPrefix!((a, b) => a is b)(so, sn).count;
 
 		so[v..$].retro.each!(a => focus(a, false));
 		sn[v..$].each!(a => focus(a, true));
@@ -182,54 +170,46 @@ package:
 private:
 	void onMove(Vector2s p)
 	{
-		if(root)
+		if(_moveSub.x < 0)
 		{
-			if(_moveSub.x >= 0)
+			auto prev = _cur;
+			_cur = root.winByPos(PE.window.mpos);
+
+			if(_cur !is prev)
 			{
-				p -= _moveSub;
-
-				with(_cur.parent)
+				if(prev)
 				{
-					p = vmap!((a, b) => clamp(a, short(0), b))(p, size - _cur.size);
-
-					if(_cur.pos != p)
-					{
-						_cur.pos = p;
-						_cur.onMove;
-					}
+					prev.flags.hasMouse = false;
+					prev.onHover(false);
 				}
 
-				return;
-			}
-
-			{
-				auto w = _cur;
-				_cur = root.winByPos(PE.window.mpos);
-
-				if(_cur !is w)
-				{
-					if(w)
-					{
-						w.flags &= ~WIN_HAS_MOUSE;
-						w.onHover(false);
-					}
-
-					if(_cur)
-					{
-						_cur.flags |= WIN_HAS_MOUSE;
-						_cur.onHover(true);
-					}
-				}
+				onCurrentChanged(_cur);
 
 				if(_cur)
 				{
-					_cur.onMove;
+					_cur.flags.hasMouse = true;
+					_cur.onHover(true);
 				}
 			}
 
-			if(_focus && PE.window.mouse & MOUSE_LEFT)
+			if(_cur)
 			{
-				_focus.onMove;
+				_cur.onMove(PE.window.mpos - _cur.absPos);
+			}
+		}
+		else
+		{
+			p -= _moveSub;
+
+			with(_cur.parent)
+			{
+				p = p.zipMap!((a, b) => clamp(a, short.init, b))(size - _cur.size);
+
+				if(_cur.pos != p)
+				{
+					_cur.pos = p;
+					_cur.onMoved;
+				}
 			}
 		}
 	}
@@ -251,13 +231,10 @@ private:
 
 	bool onDoubleClick(ubyte k)
 	{
-		if(k == MOUSE_LEFT)
+		if(k == MOUSE_LEFT && _cur)
 		{
-			if(_cur)
-			{
-				_cur.onDoubleClick;
-				return true;
-			}
+			_cur.onDoubleClick;
+			return true;
 		}
 
 		return false;
@@ -274,7 +251,7 @@ private:
 
 			if(_focus)
 			{
-				if(st && _focus.moveable)
+				if(st && _focus.flags.moveable)
 				{
 					_moveSub = PE.window.mpos - _focus.pos;
 				}
@@ -283,7 +260,9 @@ private:
 					_moveSub.x = -1;
 				}
 
-				_focus.onPress(st);
+				_focus.flags.pressed = st;
+				_focus.onPress(PE.window.mpos - _focus.absPos, st);
+
 				return true;
 			}
 		}
@@ -291,27 +270,44 @@ private:
 		return false;
 	}
 
-	void onKey(uint k, bool st)
+	bool onKey(SDL_Keycode k, bool st)
 	{
 		if(k == SDLK_RETURN || k == SDLK_KP_ENTER)
 		{
 			if(!st && _focus)
 			{
 				_focus.onSubmit;
+				return true;
 			}
 		}
 		else if(_inp)
 		{
 			_inp.focus;
 			_inp.onKey(k, st);
+
+			return true;
+		}
+
+		return false;
+	}
+
+	void onResize(Vector2s sz)
+	{
+		root.size = sz;
+		_proj = Matrix4.makeOrthogonal(0, sz.x, sz.y, 0, 1, -1);
+
+		foreach(c; root.childs)
+		{
+			if(c.end.x > sz.x || c.end.y > sz.y)
+			{
+				c.poseDefault;
+			}
 		}
 	}
 
 	void focus(GUIElement e, bool b)
 	{
-		//writefln(`%s %s`, e, b);
-
-		byFlag(e.flags, WIN_FOCUSED, b);
+		e.flags.focused = b;
 		e.onFocus(b);
 	}
 
@@ -323,5 +319,6 @@ private:
 				_inp,
 				_focus;
 
-	Vector2s _moveSub;
+	Matrix4 _proj;
+	Vector2s _moveSub = -1.Vector2s;
 }

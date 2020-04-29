@@ -19,8 +19,9 @@ import
 		perfontain.misc,
 		perfontain.misc.rc,
 
-		tt.error,
-		tt.encoding;
+		utils.except,
+		utils.logger,
+		utils.encoding;
 
 
 string charsToString(T)(in T[] str) if(T.sizeof == 1)
@@ -43,11 +44,11 @@ char[N] stringToChars(uint N)(string s) // TODO: remove
 
 final class Grf : RCounted
 {
-	this(string name)
+	this(string name, bool canWrite = false)
 	{
 		if(exists(_name = name))
 		{
-			_f = new MmFile(_name, MmFile.Mode.readWrite, 0, null);
+			_f = new MmFile(_name, canWrite ? MmFile.Mode.readWrite : MmFile.Mode.read, 0, null);
 
 			try
 			{
@@ -55,12 +56,13 @@ final class Grf : RCounted
 			}
 			catch(Exception e)
 			{
-				log.info3(`%s failed to load from cache`, _name);
+				logger.info3(`%s failed to load from cache`, _name);
 				parseHeader;
 			}
 		}
 		else
 		{
+			canWrite || throwError!`can't find file %s`(name);
 			_modified = true;
 		}
 	}
@@ -125,7 +127,7 @@ final class Grf : RCounted
 	{
 		if(auto f = name in _files)
 		{
-			return uncompress(_f[f.off..f.off + f.zlenAl], f.len);
+			return uncompress(_f[f.off..f.off + f.zlenAl], f.len).toByte;
 		}
 
 		return null;
@@ -247,7 +249,8 @@ struct GrfHeader
 	static immutable char[15] bom = `Master of Magic`;
 	ubyte[15] encryption;
 
-	uint	off,
+	uint
+			off,
 			waste,
 			filesCount; // files.length + 7
 

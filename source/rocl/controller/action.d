@@ -13,6 +13,7 @@ import
 		rocl.status,
 		rocl.network,
 		rocl.controls,
+		rocl.messages,
 		rocl.entity.actor;
 
 
@@ -30,11 +31,8 @@ final class ActionController
 
 	void onCharCreate()
 	{
-		with(ROgui) // TODO: REWRITE
-		{
-			removeCs;
-			creation = new WinCreation;
-		}
+		RO.gui.removeCharSelect;
+		RO.gui.createCreation;
 	}
 
 	void onCharSelected()
@@ -66,22 +64,25 @@ final class ActionController
 			{
 				_tip.childs.clear;
 
-				auto o = new GUIStaticText(_tip, c.cleanName, FONT_OUTLINED);
-				o.color = colorWhite;
-
+				FontInfo fi =
 				{
-					auto u = new GUIStaticText(_tip, c.cleanName);
-					u.pos = Vector2s(2);
-				}
+					flags: FONT_OUTLINED
+				};
 
-				_tip.size = o.size;
+				auto e = new GUIStaticText(_tip, c.cleanName, fi);
+				e.color = colorWhite;
+
+				e = new GUIStaticText(_tip, c.cleanName);
+				e.pos = Vector2s(2);
+
+				_tip.toChildSize;
 			}
 
 			_tip.pos = Vector2s(pos.x - _tip.size.x / 2, pos.y);
 		}
 		else if(_tip)
 		{
-			_tip.remove;
+			_tip.deattach;
 			_tip = null;
 		}
 	}
@@ -97,18 +98,41 @@ private:
 		with(ROnet.st)
 		{
 			ch = cast(ubyte)a.bl;
-			ROgui.createCharSelect(curChar);
+			RO.gui.createCharSelect(curChar);
 		}
 	}
 
 	bool onButton(ubyte k, bool st)
 	{
+		if(k == MOUSE_RIGHT)
+		{
+			if(auto c = ROent.cur)
+			{
+				if(auto p = cast(Player)c)
+				{
+					/*if(p is ROent.self || ROent.self is null)
+					{
+						return false;
+					}*/
+
+					if(!st)
+					{
+						new MenuPopup(p);
+					}
+
+					return true;
+				}
+			}
+
+			return false;
+		}
+
 		if(k != MOUSE_LEFT || !st)
 		{
 			return false;
 		}
 
-		auto res = ROgui.isGame ? doAct || RO.items.pickUp || mapMove : doCS;
+		auto res = RO.gui.isGame ? doAct || RO.items.pickUp || mapMove : doCS;
 
 		if(_sk)
 		{
@@ -120,7 +144,7 @@ private:
 
 	bool doCS()
 	{
-		if(!ROgui.creation)
+		if(!RO.gui.creation)
 		{
 			if(auto c = ROent.cur)
 			{
@@ -177,7 +201,7 @@ private:
 				}
 				else
 				{
-					ROnet.send!Pk08a8(RoPos(p));
+					ROnet.moveTo(RoPos(p));
 					return true;
 				}
 

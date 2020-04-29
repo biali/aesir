@@ -1,18 +1,9 @@
 module perfontain.managers.gui.element;
 
 import
-		std.utf,
-		std.range,
-		std.stdio,
-		std.ascii,
- 		std.array,
- 		std.typecons,
- 		std.string,
- 		std.regex,
-		std.encoding,
- 		std.algorithm,
+		std,
 
- 		ciema,
+		stb.image,
 
 		perfontain,
 
@@ -24,17 +15,19 @@ import
 		perfontain.signals;
 
 
-enum : ubyte
+enum Win
 {
-	WIN_HAS_MOUSE		= 1,
-	WIN_FOCUSED			= 2,
+	none,
 
-	WIN_MOVEABLE		= 4,
-	WIN_BACKGROUND		= 8,
-	WIN_HIDDEN			= 16,
-	WIN_CASCADE_SHOW	= 32, // TODO: GET RID
-	WIN_HAS_INPUT		= 64,
-	WIN_TOP_MOST		= 128,
+	hidden			= 1 << 0,
+	focused			= 1 << 1,
+	pressed			= 1 << 2,
+	moveable		= 1 << 3,
+	captureFocus	= 1 << 4,
+	topMost			= 1 << 5,
+	hasMouse		= 1 << 6,
+	hasInput		= 1 << 7,
+	enabled			= 1 << 8,
 }
 
 enum : ubyte
@@ -50,35 +43,27 @@ enum : ubyte
 
 class GUIElement : RCounted
 {
-	this(GUIElement p)
+	this(GUIElement p, Vector2s sz = Vector2s.init, Win f = Win.none, string n = null)
 	{
 		if(p)
 		{
-			parent = p;
-			parent.childs ~= this;
+			attach(p);
 		}
 
-		if(name.length)
-		{
-			pos.x = -1;
+		assert(!flags);
+		assert(!name.length);
+		assert(!size.x && !size.y);
 
-			if(auto v = name in PE.settings.wins)
-			{
-				auto u = *v + size;
-
-				if(v.x >= 0 && v.y >= 0 && u.x <= PEwindow._size.x && u.y <= PEwindow._size.y)
-				{
-					pos = *v;
-				}
-			}
-		}
+		name = n;
+		size = sz;
+		flags = f;
 	}
 
 	~this()
 	{
-		if(name.length)
+		if(parent is PE.gui.root && name.length)
 		{
-			PE.settings.wins[name] = pos;
+			PE.settings.wins[name] = WindowData(pos);
 		}
 
 		PE.gui.onDie(this);
@@ -90,28 +75,47 @@ class GUIElement : RCounted
 
 		foreach(e; childs[].filter!(a => a.visible))
 		{
-			auto u = e.pos + e.size;
-
-			//assert(u.x <= size.x);
-			//assert(u.y <= size.y);
+			//assert(u.end.x <= size.x);
+			//assert(u.end.y <= size.y);
 
 			e.draw(p);
 		}
 	}
 
-	/// received events
+	void tryPose()
+	{
+		assert(parent is PE.gui.root && name.length);
+
+		if(auto w = name in PE.settings.wins)
+		{
+			pos = w.pos;
+
+			if(end.x <= parent.size.x && end.y <= parent.size.y)
+			{
+				return;
+			}
+		}
+
+		poseDefault;
+	}
+
+	void poseDefault()
+	{
+		pos = Vector2s.init;
+	}
 
 	bool onWheel(Vector2s)
 	{
 		return false;
 	}
 
-	void onMove() {}
-
+	void onMove(Vector2s) {}
+	void onMoved() {}
+	void onResize() {}
 	void onShow(bool) {}
 	void onFocus(bool) {}
 	void onHover(bool) {}
-	void onPress(bool) {}
+	void onPress(Vector2s, bool) {}
 	void onDoubleClick() {}
 
 	void onSubmit() {}
@@ -121,46 +125,102 @@ class GUIElement : RCounted
 final:
 	auto byHierarchy()
 	{
-		struct S
-		{
-			const empty()
-			{
-				return !_e.parent;
-			}
+		return HierarchyRange!(typeof(this))(this);
+	}
 
-			void popFront()
-			{
-				assert(!empty);
-				_e = _e.parent;
-			}
+	const byHierarchy()
+	{
+		return HierarchyRange!(typeof(this))(cast()this);
+	}
 
-			inout front()
-			{
-				assert(!empty);
-				return _e;
-			}
-
-		private:
-			GUIElement _e;
-		}
-
-		return S(this);
+	void bringToTop()
+	{
+		auto arr = parent.childs[];
+		swap(arr.find!(a => a is this)[0], arr.back);
 	}
 
 	void toChildSize()
 	{
-		size.x = childs[].map!(a => cast(short)(a.pos.x + a.size.x)).fold!max(short(0));
-		size.y = childs[].map!(a => cast(short)(a.pos.y + a.size.y)).fold!max(short(0));
+		size = childs[].calcSize;
+
+		/*foreach(c; childs[].filter!(a => a.flags & Win.parentSize))
+		{
+			if(c.flags.parentWidth)
+			{
+				c.size.x = size.x;
+			}
+
+			if(c.flags.parentHeight)
+			{
+				c.size.y = size.y;
+			}
+
+			c.onResize;
+		}*/
+	}
+
+	void toParentSize()
+	{
+		size = parent.size;
+		onResize;
+	}
+
+	void pad(Vector2s p)
+	{
+		size += p * 2;
+		childs[].each!(a => a.pos += p);
+	}
+
+	void pad(ushort n)
+	{
+		pad(n.Vector2s);
+	}
+
+	void poseBetween(GUIElement a, GUIElement b, bool resize = true)
+	{
+		if(a.pos.x == b.pos.x)
+		{
+			poseFunc(0, a, b, resize);
+		}
+		else if(a.pos.y == b.pos.y)
+		{
+			poseFunc(1, a, b, resize);
+		}
+		else
+		{
+			assert(false);
+		}
+	}
+
+	void center()
+	{
+		move(POS_CENTER, 0, POS_CENTER);
+	}
+
+	void moveX(ubyte m, int d = 0)
+	{
+		moveFunc(0, parent, m, d);
+	}
+
+	void moveY(ubyte m, int d = 0)
+	{
+		moveFunc(1, parent, m, d);
+	}
+
+	void move(ubyte xm, int xd, ubyte ym, int yd = 0)
+	{
+		moveX(xm, xd);
+		moveY(ym, yd);
 	}
 
 	void moveX(GUIElement e, ubyte m, int d = 0)
 	{
-		moveFunc!`x`(e, m, d);
+		moveFunc(0, e, m, d);
 	}
 
 	void moveY(GUIElement e, ubyte m, int d = 0)
 	{
-		moveFunc!`y`(e, m, d);
+		moveFunc(1, e, m, d);
 	}
 
 	void move(GUIElement x, ubyte xm, int xd, GUIElement y, ubyte ym, int yd = 0)
@@ -176,32 +236,56 @@ final:
 
 	const absPos()
 	{
-		return (cast()this).byHierarchy.fold!((a, b) => a + b.pos)(Vector2s.init); // TODO: CAST
+		return byHierarchy.fold!((a, b) => a + b.pos)(Vector2s.init);
 	}
 
-	void focus(bool b = true)
+	const absEnd()
 	{
-		PE.gui.doFocus(b ? this : null);
+		return absPos + size;
 	}
 
-	void input(bool b = true)
+	void focus(bool v = true)
 	{
-		PE.gui.doInput(b ? this : null);
+		PE.gui.doFocus(v ? this : null);
 	}
 
-	void center()
+	void input(bool v = true)
 	{
-		pos = (PEwindow._size - size) / 2;
+		PE.gui.doInput(v ? this : null);
 	}
 
-	void remove()
+	/*void add(GUIElement[] arr)
 	{
-		deattach;
+		arr.each!(a => a.attach(this));
+	}*/
+
+	inout firstParent(T)()
+	{
+		return cast(T)byHierarchy.find!(a => cast(T)a).front;
+	}
+
+	auto find(T)()
+	{
+		return childs[].filter!(a => cast(T)a).array;
+	}
+
+	void removeChilds()
+	{
+		while(childs.length)
+		{
+			auto c = childs.back;
+
+			assert(c.parent is this);
+			c.deattach;
+		}
 	}
 
 	void deattach()
 	{
-		attach(null);
+		if(isRcAlive)
+		{
+			attach(null);
+		}
 	}
 
 	void attach(GUIElement p)
@@ -222,51 +306,65 @@ final:
 		release;
 	}
 
-	void show(bool b = true)
+	auto showOrHide()
 	{
-		if(!(flags & WIN_HIDDEN) == b)
+		if(flags.hidden)
 		{
-			return;
+			show;
+			focus;
 		}
-
-		onShow(b);
-		byFlag(flags, WIN_HIDDEN, !b);
-
-		if(flags & WIN_CASCADE_SHOW)
+		else
 		{
-			childs[].each!(a => a.show(b));
+			hide;
 		}
 	}
 
-	/// flags
+	void show(bool v = true)
+	{
+		flags.hidden = !v;
+	}
+
+	void hide()
+	{
+		show(false);
+	}
 
 	const visible()
 	{
-		return !(flags & WIN_HIDDEN);
+		return !flags.hidden;
 	}
 
-	const moveable()
+	override string toString() const
 	{
-		return !!(flags & WIN_MOVEABLE);
+		return typeid(this).toString ~ (name ? '(' ~ name ~ ')' : null);
 	}
 
-	/// member variables
+	const dumpPath()
+	{
+		auto h = byHierarchy;
+		return h.empty ? toString : format(`%(%s -> %)`, h.array.retro);
+	}
 
 	string name;
 
 	GUIElement parent;
 	RCArray!GUIElement childs;
 
+	BitFlags!Win flags;
+
 	Vector2s	pos,
 				size;
-
-	ubyte flags;
 protected:
 	enum
 	{
 		DRAW_MIRROR_H	= 1,
 		DRAW_MIRROR_V	= 2,
 		DRAW_ROTATE		= 4,
+	}
+
+	static sizeFor(uint idx)
+	{
+		return PE.gui.sizes[idx];
 	}
 
 	const drawQuad(Vector2s p, Vector2s sz, Color c = colorWhite)
@@ -279,30 +377,33 @@ protected:
 		drawImage(PE.gui.holder, id, p, c, sz, flags);
 	}
 
-	const drawImage(in MeshHolder mh, uint id, Vector2s p, Color c = colorWhite, Vector2s sz = Vector2s.init, ubyte flags = 0)
+	const drawImage(in MeshHolder mh, uint id, Vector2s p, Color c = colorWhite, Vector2s sz = Vector2s.init, ubyte mode = 0)
 	{
-		auto d = PE.render.alloc;
+		DrawInfo d;
 
 		d.mh = cast()mh;
 		d.id = cast(ushort)id;
+
+		d.color = c;
 		d.flags = DI_NO_DEPTH;
+		d.blendingMode = blendingNormal;
 
 		{
 			Vector2s v = sz.x ? sz : size;
 
-			if(flags & (DRAW_MIRROR_H | DRAW_MIRROR_V | DRAW_ROTATE))
+			if(mode)
 			{
-				auto u = Vector2(0.5);
+				auto u = Vector3(0.5, 0.5, 0);
 
-				d.matrix *= Matrix4.translate(Vector3(-u, 0));
+				d.matrix *= Matrix4.translate(-u);
 
 				d.matrix *= Matrix4.scale(Vector3(
-													flags & DRAW_MIRROR_H ? -1 : 1,
-													flags & DRAW_MIRROR_V ? -1 : 1,
+													mode & DRAW_MIRROR_H ? -1 : 1,
+													mode & DRAW_MIRROR_V ? -1 : 1,
 													1
 																					));
 
-				if(flags & DRAW_ROTATE)
+				if(mode & DRAW_ROTATE)
 				{
 					if(sz.x)
 					{
@@ -312,29 +413,45 @@ protected:
 					d.matrix *= Matrix4.rotate(Vector3(0, 0, 90 * TO_RAD));
 				}
 
-				d.matrix *= Matrix4.translate(Vector3(u, 0));
-			}
-
-			debug
-			{
-				if(size.x)
-				{
-					auto
-							q = p - absPos,
-							z = q + v;
-
-					//writefln(`%s %s %s %s %s`, q, z, pos, size, absPos);
-
-					assert(!parent || q.x >= 0 && q.y >= 0 && z.x <= size.x && z.y <= size.y, format(`%s + %s > %s`, q, v, size));
-				}
+				d.matrix *= Matrix4.translate(u);
 			}
 
 			d.matrix *=	Matrix4.scale(Vector3(v, 0));
 			d.matrix *= Matrix4.translate(Vector3(p, 0));
+
+			debug
+			{
+				if(!v.x || !v.y)
+				{
+					logger.error(`drawing with zero size: %s`, dumpPath);
+				}
+
+				foreach(e; byHierarchy.array.retro)
+				{
+					if(e.pos.x < 0 || e.pos.y < 0)
+					{
+						logger.error(`negative position: %s`, e.dumpPath);
+						break;
+					}
+
+					if(e.end.x > e.parent.size.x || e.end.y > e.parent.size.y)
+					{
+						logger.error(`out of parent: %s`, e.dumpPath);
+						break;
+					}
+				}
+
+				auto	q = p - absPos,
+						z = q + v;
+
+				if(q.x < 0 || q.y < 0 || z.x > size.x || z.y > size.y)
+				{
+					logger.error(`drawing out of rect: %s`, dumpPath);
+				}
+			}
 		}
 
-		d.blendingMode = blendingNormal;
-		d.color = c;
+		PE.render.toQueue(d);
 	}
 
 package:
@@ -342,74 +459,125 @@ package:
 	{
 		p -= pos;
 
-		if(parent && (flags & WIN_BACKGROUND || !visible || p.x < 0 || p.y < 0 || p.x >= size.x || p.y >= size.y))
+		if(visible && p.x >= 0 && p.y >= 0 && p.x < size.x && p.y < size.y)
 		{
-			return null;
-		}
-
-		foreach(c; childs[].retro)
-		{
-			if(auto r = c.winByPos(p))
+			foreach(c; childs[].retro)
 			{
-				return r;
+				if(auto r = c.winByPos(p))
+				{
+					return r;
+				}
+			}
+
+			if(flags.captureFocus)
+			{
+				return this;
 			}
 		}
 
-		if(parent)
-		{
-			return this;
-		}
-
-		//assert(this is PEgui.root);
 		return null;
 	}
 
 private:
-	void moveFunc(string S)(GUIElement e, ubyte q, int d)
+	struct HierarchyRange(T)
+	{
+		const empty()
 		{
-			auto notParent = e !is parent;
-
-			final switch(q)
-			{
-			case POS_MIN:
-				mixin(`pos.` ~ S ~ `= cast(short)d;`);
-
-				if(notParent)
-				{
-					mixin(`pos.` ~ S ~ `+= e.pos.` ~ S ~ `;`);
-				}
-
-				break;
-
-			case POS_MAX:
-				mixin(`pos.` ~ S ~ `= cast(short)(e.size.` ~ S ~ ` - size.` ~ S ~ ` + d);`);
-
-				if(notParent)
-				{
-					mixin(`pos.` ~ S ~ `+= e.pos.` ~ S ~ `;`);
-				}
-
-				break;
-
-			case POS_BELOW:
-				assert(notParent);
-				mixin(`pos.` ~ S ~ `= cast(short)(e.pos.` ~ S ~ ` - size.` ~ S ~ ` + d);`);
-				break;
-
-			case POS_ABOVE:
-				assert(notParent);
-				mixin(`pos.` ~ S ~ `= cast(short)(e.end.` ~ S ~ ` + d);`);
-				break;
-
-			case POS_CENTER:
-				mixin(`pos.` ~ S ~ `= cast(short)((e.size.` ~ S ~ ` - size.` ~ S ~ `) / 2 + d);`);
-
-				if(notParent)
-				{
-					mixin(`pos.` ~ S ~ `+= e.pos.` ~ S ~ `;`);
-				}
-
-				break;
-			}
+			return !_e.parent;
 		}
+
+		void popFront()
+		{
+			assert(!empty);
+			_e = _e.parent;
+		}
+
+		T front()
+		{
+			assert(!empty);
+			return _e;
+		}
+
+	private:
+		GUIElement _e;
+	}
+
+	void centrize(ubyte idx, uint zone, uint start = 0)
+	{
+		assert(size[idx] <= zone);
+
+		pos[idx] = cast(short)(start + (zone - size[idx]) / 2);
+	}
+
+	void moveFunc(ubyte idx, GUIElement e, ubyte q, int d)
+	{
+		assert(e);
+		auto notParent = !(e is parent);
+
+		final switch(q)
+		{
+		case POS_MIN:
+			pos[idx] = cast(short)d;
+
+			if(notParent)
+			{
+				pos[idx] += e.pos[idx];
+			}
+
+			break;
+
+		case POS_MAX:
+			pos[idx] = cast(short)(e.size[idx] - size[idx] + d);
+
+			if(notParent)
+			{
+				pos[idx] += e.pos[idx];
+			}
+
+			break;
+
+		case POS_BELOW:
+			assert(notParent);
+
+			pos[idx] = cast(short)(e.pos[idx] - size[idx] + d);
+			break;
+
+		case POS_ABOVE:
+			assert(notParent);
+
+			pos[idx] = cast(short)(e.end[idx] + d);
+			break;
+
+		case POS_CENTER:
+			centrize(idx, e.size[idx], d);
+
+			if(notParent)
+			{
+				pos[idx] += e.pos[idx];
+			}
+
+			break;
+		}
+	}
+
+	void poseFunc(ubyte idx, GUIElement a, GUIElement b, bool resize)
+	{
+		assert(a.size[idx] == b.size[idx]);
+
+		ubyte idx2 = idx ? 0 : 1;
+		auto z = b.pos[idx2] - a.end[idx2];
+
+		if(resize)
+		{
+			size[idx] = a.size[idx];
+			size[idx2] = cast(short)z;
+
+			moveFunc(idx2, a, POS_ABOVE, 0);
+		}
+		else
+		{
+			centrize(idx, a.size[idx], a.pos[idx]);
+			centrize(idx2, z, a.end[idx2]);
+		}
+	}
 }

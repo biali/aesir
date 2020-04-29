@@ -1,12 +1,7 @@
 module ro.conv.gui;
 
 import
-		std.conv,
-		std.range,
-		std.array,
-		std.format,
-		std.string,
-		std.algorithm,
+		std,
 
 		perfontain,
 
@@ -16,60 +11,12 @@ import
 		rocl.game;
 
 
-enum Elements =
-[
-	`WIN_TOP`,
-	`WIN_TOP_SPACER`,
-	`WIN_BOTTOM`,
-	`WIN_BOTTOM_SPACER`,
-	`WIN_PART`,
-
-	`BTN_PART`,
-	`BTN_SPACER`,
-	`BTN_HOVER_PART`,
-	`BTN_HOVER_SPACER`,
-
-	`CHECKBOX`,
-	`CHECKBOX_CHECKED`,
-
-	`SCROLL_ARROW`,
-	`SCROLL_PART`,
-	`SCROLL_SPACER`,
-
-	`SELECT_ARROW`,
-
-	`CHAT_PART`,
-	`CHAT_SPACER`,
-
-	`NPC_WIN`,
-
-	`INV_ITEM`,
-	`INV_TAB_ITEM`,
-	`INV_TAB_EQUIP`,
-	`INV_TAB_ETC`,
-];
-
-mixin(
-{
-	string r;
-
-	foreach(i, e; Elements)
-	{
-		r ~= `enum ` ~ e ~ ` = ` ~ i.to!string ~ `;`;
-		r ~= `ref ` ~ e ~ `_SZ() @property { return PE.gui.sizes[` ~ i.to!string ~ `]; }`;
-	}
-
-	return r;
-}
-());
-
 final class GuiConverter : Converter
 {
 	override const(void)[] process()
 	{
-		auto arr = Elements
-							.map!(a => a.toLower)
-							.map!(a => new Image(PEfs.get(`data/gui/` ~ a ~ `.png`)))
+		auto arr = GUI_STR
+							.map!(a => new Image(PEfs.get(`data/gui/` ~ a.toLower ~ `.png`)))
 							.array;
 
 		RogFile res =
@@ -86,11 +33,11 @@ private:
 	{
 		MeshInfo[] meshes;
 
-		foreach(i, ref e; Elements)
+		foreach(im; arr)
 		{
 			SubMeshInfo sm =
 			{
-				tex: arr[i]
+				tex: im
 			};
 
 			sm.data.indices = triangleOrderReversed ~ triangleOrder; // TODO: order ???
@@ -126,6 +73,5 @@ struct RogFile
 	}
 
 	HolderData data;
-
-	@(`ubyte`, `validif`, `sizes.length == ` ~ Elements.length.to!string) Vector2s[] sizes;
+	@(`length`, GUI.length.to!string) Vector2s[] sizes;
 }

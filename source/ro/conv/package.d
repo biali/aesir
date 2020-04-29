@@ -17,8 +17,8 @@ import
 		ro.conv.map,
 		ro.conv.gui,
 		ro.conv.all,
-		ro.conv.pack,
 		ro.conv.item,
+		ro.conv.effect,
 
 		rocl.rofs;
 
@@ -31,6 +31,8 @@ auto convert(T)(string res, string path, bool delegate() checker = null)
 	{
 	case `aaf`:
 		path = `effect/` ~ path;
+		break;
+
 	default:
 	}
 
@@ -39,7 +41,7 @@ auto convert(T)(string res, string path, bool delegate() checker = null)
 		return value;
 	}
 
-	log.info2(`converting %s...`, path);
+	logger.info2(`converting %s...`, path);
 
 	{
 		[ thisExePath, `--res`, res, `--path`, path ].spawnProcess.wait;
@@ -53,19 +55,15 @@ bool processConv(string[] args)
 {
 	try
 	{
-		bool all, pack;
+		bool all;
 
 		string
 				res,
 				path;
 
-		getopt(args, config.passThrough, `res`, &res, `path`, &path, `all`, &all, `pack`, &pack);
+		getopt(args, config.passThrough, `res`, &res, `path`, &path, `all`, &all);
 
-		if(pack)
-		{
-			makeResPack;
-		}
-		else if(all)
+		if(all)
 		{
 			doConvert;
 		}
@@ -120,7 +118,7 @@ bool processConv(string[] args)
 	}
 	catch(Throwable e)
 	{
-		log.error(`%s`, e);
+		logger.error(`%s`, e);
 	}
 
 	return true;
@@ -158,7 +156,7 @@ bool tryLoad(T)(string path, ref T res)
 	}
 	catch(Exception e)
 	{
-		log.warning("can't load `%s', error: %s", path, e.msg);
+		logger.warning("can't load `%s', error: %s", path, e.msg);
 	}
 
 	return false;

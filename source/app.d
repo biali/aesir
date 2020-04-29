@@ -11,11 +11,16 @@ import
 		rocl.game;
 
 
+version(Windows)
+{
+	pragma(linkerDirective, `"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'"`);
+}
+
 extern(C) __gshared
 {
 	bool rt_cmdline_enabled = false;
 	bool rt_envvars_enabled = false;
-	string[] rt_options = [ `scanDataSeg=precise` ];
+	string[] rt_options = [ `scanDataSeg=precise`, `gcopt=cleanup:finalize` ]; // gc:precise
 
 	export
 	{
@@ -27,14 +32,9 @@ extern(C) __gshared
 
 void main(string[] args)
 {
-	SetConsoleOutputCP(65001);
-
-	version(linux)
+	version(Windows)
 	{
-		enum N = 16777216;
-		static immutable r = rlimit(N, N);
-
-		!setrlimit(RLIMIT_STACK, &r) || throwError(`can't set stack size`);
+		SetConsoleOutputCP(65001);
 	}
 
 	PEfs = new RoFileSystem;
@@ -55,7 +55,7 @@ void main(string[] args)
 		{}
 		else
 		{
-			errorReport(e);
+			//errorReport(e);
 		}
 
 		showErrorMessage(e.toString);
@@ -64,7 +64,7 @@ void main(string[] args)
 	{
 		RO.destroy;
 		PE.destroy;
-	}
 
-	log(`shutdown complete`);
+		logger(`shutdown complete`);
+	}
 }

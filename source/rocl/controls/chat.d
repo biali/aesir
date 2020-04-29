@@ -15,29 +15,53 @@ final class RoChat : GUIElement
 {
 	this(bool online = true)
 	{
-		name = `chat`;
-		flags = WIN_MOVEABLE;
-
-		super(PE.gui.root);
-
-		size.x = 670;
+		super(PE.gui.root, Vector2s.init, Win.moveable | Win.captureFocus, `chat`);
 
 		{
-			auto w = new ScrolledText(this, Vector2s(size.x - 8, 5), SCROLL_ARROW);
-			w.pos = Vector2s(4);
+			auto q = new GUIQuad(this, Color(0, 0, 0, 110));
 
-			size.y = cast(ushort)(w.size.y + szY + 8);
+			new ScrolledText(this, Vector2s(660, 5));
+
+			sc.pos = 4.Vector2s;
+			size = q.size = 8.Vector2s + sc.size;
 		}
 
-		if(pos.x < 0)
 		{
-			pos = parent.size - size;
+			auto l = new GUIImage(this, CHAT_PART);
+			auto r = new GUIImage(this, CHAT_PART, DRAW_MIRROR_H);
+			auto s = new GUIImage(this, CHAT_SPACER);
+
+			new GUIEditText(this);
+
+			size.y += l.size.y;
+
+			l.moveY(POS_MAX);
+			r.move(POS_MAX, 0, POS_MAX);
+			s.moveY(POS_MAX);
+
+			s.poseBetween(l, r);
+
+			edit.size.x = s.size.x;
+			edit.move(s, POS_MIN, 0, l, POS_CENTER);
 		}
 
-		//createEdit;
-		_cp = PE.onKey.add(&onKey); // TODO: FIX
+		edit.onEnter = (a)
+		{
+			if(a.length)
+			{
+				ROnet.toChat(a);
+				return true;
+			}
+			else
+			{
+				edit.flags.enabled = disabled;
+			}
 
-		_online = online;
+			return false;
+		};
+
+		tryPose;
+		edit.focus;
 	}
 
 	void add(string s, Color c = colorTransparent)
@@ -45,90 +69,12 @@ final class RoChat : GUIElement
 		sc.add(s, c);
 	}
 
-	override void draw(Vector2s p) const
-	{
-		auto h = size.y - CHAT_PART_SZ.y;
-
-		auto
-				np = p + pos,
-				vp = np + Vector2s(0, h);
-
-		drawQuad(np, Vector2s(size.x, h), Color(0, 0, 0, 110));
-
-		drawImage(CHAT_PART, vp, colorWhite, CHAT_PART_SZ);
-		drawImage(CHAT_SPACER, vp + Vector2s(CHAT_PART_SZ.x, 0), colorWhite, Vector2s(size.x - CHAT_PART_SZ.x * 2, CHAT_PART_SZ.y));
-		drawImage(CHAT_PART, vp + Vector2s(size.x - CHAT_PART_SZ.x, 0), colorWhite, CHAT_PART_SZ, DRAW_MIRROR_H);
-
-		super.draw(p);
-	}
-
 	const disabled()
 	{
-		return childs.length == 1;
+		return !edit.flags.enabled;
 	}
 
 private:
-	static szY()
-	{
-		return CHAT_PART_SZ.y;
-	}
-
-	void onKey(uint k, bool p)
-	{
-		if(flags & WIN_HIDDEN)
-		{
-			return;
-		}
-
-		if(k == SDLK_RETURN || k == SDLK_KP_ENTER) // TODO: COMMON FUNC
-		{
-			if(!p && disabled)
-			{
-				_cp = null;
-				createEdit;
-			}
-		}
-	}
-
-	void createEdit()
-	{
-		auto e = new GUIEditText(this);
-
-		e.pos = Vector2s(7, size.y - szY + (szY - e.size.y) / 2);
-		e.size.x = cast(ushort)(size.x - e.pos.x * 2);
-
-		e.onEnter = (a)
-		{
-			if(a.length)
-			{
-				if(_online)
-				{
-					ROnet.toChat(a);
-				}
-				else
-				{
-					try ROres.load(a); catch(Exception e) e.log;
-				}
-
-				return true;
-			}
-			else
-			{
-				e.remove;
-				_cp = PE.onKey.add(&onKey);
-			}
-
-			return false;
-		};
-
-		e.focus;
-	}
-
-	auto sc()
-	{
-		return cast(ScrolledText)childs[0];
-	}
-
-	bool _online;
-	RC!ConnectionPoint _cp;
+	mixin MakeChildRef!(ScrolledText, `sc`, 1);
+	mixin MakeChildRef!(GUIEditText, `edit`, 5);
 }

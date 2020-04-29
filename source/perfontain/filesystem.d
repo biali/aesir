@@ -1,11 +1,10 @@
 module perfontain.filesystem;
 
 import
-		std.path,
-		std.file,
+		std,
 
 		perfontain.misc,
-		tt.error;
+		utils.except;
 
 
 enum
@@ -50,11 +49,11 @@ class FileSystem
 
 		Rdg dg = (data, isPath)
 		{
-			data.length || throwErrorImpl(f, l, `can't find file %s`, name);
+			data.length || throwError!`can't find file %s`(f, l, name);
 
 			if(isPath)
 			{
-				res = binaryReadFile!T(cast(string)data, f, l);
+				res = binaryReadFile!T(data.assumeUTF, f, l);
 			}
 			else
 			{
@@ -86,15 +85,15 @@ class FileSystem
 				return null;
 			}
 
-			return binaryWrite(data);
+			return binaryWrite(data).toByte;
 		};
 
 		doWrite(name, dg, t);
 	}
 
 protected:
-	alias Rdg = void delegate(in void[], bool);
-	alias Wdg = const(void)[] delegate(string);
+	alias Rdg = void delegate(in ubyte[], bool);
+	alias Wdg = const(ubyte)[] delegate(string);
 
 	void doRead(string name, Rdg dg)
 	{
@@ -113,7 +112,7 @@ protected:
 			}
 		}
 
-		dg(name, true);
+		dg(name.representation, true);
 	}
 
 	void doWrite(string name, Wdg dg, ubyte t)
@@ -137,5 +136,5 @@ protected:
 
 private:
 	string _temp;
-	const(void)[][string] _files;
+	const(ubyte)[][string] _files;
 }

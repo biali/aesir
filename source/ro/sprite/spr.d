@@ -5,12 +5,12 @@ import
 		std.stdio,
 		std.algorithm,
 
-		ciema,
+		stb.image,
 
 		perfontain.math.matrix,
 		perfontain.misc,
 
-		tt.error;
+		utils.except;
 
 struct ImageOffset
 {

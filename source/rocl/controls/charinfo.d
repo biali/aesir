@@ -20,7 +20,7 @@ final class CharInfo : RCounted
 	{
 		if(_hp)
 		{
-			_hp.remove;
+			_hp.deattach;
 		}
 
 		removeMsg;
@@ -34,7 +34,7 @@ final class CharInfo : RCounted
 			_skTimer.exec;
 		}
 
-		_skTimer = ROgui.values.show(_ent.pos, num);
+		_skTimer = RO.gui.values.show(_ent.pos, num);
 	}
 
 	void doCast(uint dur, bool enemy)
@@ -107,7 +107,7 @@ final class CharInfo : RCounted
 
 			if(_hp)
 			{
-				_hp.pos = pos + Vector2s(-_hp.size.x / 2, _hp.size.y);
+				_hp.pos = pos + Vector2s(_hp.size.x / -2, _hp.size.y);
 			}
 		}
 	}
@@ -129,7 +129,7 @@ private:
 	{
 		if(_castTimer)
 		{
-			_cast.remove;
+			_cast.deattach;
 			_cast = null;
 
 			_castTimer.removed = true;
@@ -141,7 +141,7 @@ private:
 	{
 		if(_msgTimer)
 		{
-			_msg.remove;
+			_msg.deattach;
 			_msg = null;
 
 			_msgTimer.removed = true;

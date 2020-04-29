@@ -40,6 +40,20 @@ final class Status
 	Skill[] skills;
 
 	Items items;
+
+	// rest
+	Param!uint	hp,
+				sp,
+				maxHp,
+				maxSp,
+
+				bexp,
+				jexp,
+				bnextExp,
+				jnextExp;
+
+	Param!ushort	blvl,
+					jlvl;
 }
 
 struct Items
@@ -82,6 +96,18 @@ struct Items
 	Signal!(void, Item) onAdded;
 }
 
+struct Param(T)
+{
+	Signal!(void, T) onChange;
+
+	mixin StatusValue!(T, `value`, onUpdate);
+private:
+	void onUpdate()
+	{
+		onChange(value);
+	}
+}
+
 struct Stat
 {
 	mixin StatusIndex!(`stats`);
@@ -92,7 +118,7 @@ struct Stat
 private:
 	void onUpdate()
 	{
-		ROgui.status.stats.update(this);
+		RO.gui.status.stats.update(this);
 	}
 }
 
@@ -105,7 +131,7 @@ struct Bonus
 private:
 	void onUpdate()
 	{
-		ROgui.status.bonuses.update(this);
+		RO.gui.status.bonuses.update(this);
 	}
 }
 
@@ -121,7 +147,7 @@ final class Skiller : RCounted
 	{
 		if(_bg)
 		{
-			_bg.remove;
+			_bg.deattach;
 		}
 	}
 
@@ -177,6 +203,6 @@ final class Skill
 private:
 	void onUpdate()
 	{
-		ROgui.skills.update(this);
+		RO.gui.skills.update(this);
 	}
 }

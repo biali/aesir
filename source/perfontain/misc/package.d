@@ -7,22 +7,25 @@ import
 		std.traits,
 		std.string,
 		std.algorithm,
+		std.experimental.allocator,
+		std.experimental.allocator.mallocator,
 		std.experimental.allocator.gc_allocator,
+		std.experimental.allocator.building_blocks.free_tree,
 
 		core.stdc.string,
 
-		ciema,
+		stb.image,
 
 		perfontain.opengl,
 		perfontain.config,
 		perfontain.math.matrix,
 
-		tt.error,
-		tt.logger : log;
+		utils.except,
+		utils.logger;
 
 public import
-				tt.misc,
-				tt.binary;
+				utils.misc,
+				utils.binary;
 
 
 alias Op(string S) = (a, b) => mixin(`a` ~ S ~ `b`);
@@ -43,6 +46,7 @@ alias Op(string S) = (a, b) => mixin(`a` ~ S ~ `b`);
 		GL_ONE_MINUS_DST_COLOR,
 		GL_SRC_ALPHA_SATURATE,
 	],
+
 	modes2 =
 	[
 		GL_CONSTANT_COLOR,
@@ -55,14 +59,14 @@ alias Op(string S) = (a, b) => mixin(`a` ~ S ~ `b`);
 auto packModes(ubyte src, ubyte dst)
 {
 	assert(src < 16 && dst < 16);
+
 	return cast(ubyte)(dst << 4 | src);
 }
 
 auto unpackModes(ubyte mode)
 {
-	ubyte[2] res;
-	res.front = mode & 0xF;
-	res.back = mode >> 4;
+	ubyte[2] res = [ mode & 0xF, mode >> 4 ];
+
 	return res;
 }
 
@@ -75,16 +79,6 @@ auto makeAligned(void[] b, ubyte a)
 {
 	auto k = cast(size_t)b.ptr;
 	return b[alignTo(k, a) - k..$];
-}
-
-auto removeUnstable(T, A...)(ref T[] arr, A args)
-{
-	arr = arr.remove!(SwapStrategy.unstable)(args);
-}
-
-auto removeStable(T, A...)(ref T[] arr, A args)
-{
-	arr = arr.remove(args);
 }
 
 auto sliceOne(T)(ref T t)
@@ -112,10 +106,6 @@ void eachGroup(alias F, T)(T[] arr, void delegate(T[]) dg)
 	}
 }
 
-/*auto as(T, E)(E *arr, size_t len)
-{
-	return (cast(T *)arr)[0..len];
-}*/
 auto constAway(T)(in T[] arr)
 {
 	return arr.as!T;
@@ -125,7 +115,10 @@ auto createArray(T, A...)(uint len, A args)
 {
 	static if(args.length)
 	{
-		return generate!(() => createArray!T(args)).take(len).array;
+		return len
+					.iota
+					.map!(_ => createArray!T(args))
+					.array;
 	}
 	else
 	{
@@ -135,9 +128,9 @@ auto createArray(T, A...)(uint len, A args)
 
 ubyte direction(Vector2 v, bool inv = false)
 {
-	auto k = cast(ubyte)((atan2(v.normalize.x, v.y) * TO_DEG - 22.5 + 360) / 45);
+	auto k = cast(int)((atan2(v.normalize.x, v.y) * TO_DEG + 360 - 22.5) / 45);
 
-	return (inv ? cast(ubyte)(k + 5) : ~k) & 7;
+	return (inv ? k + 5 : ~k) & 7;
 }
 
 auto makeIndices(uint cnt)
@@ -168,17 +161,6 @@ bool set(T)(ref T var, T new_)
 	return false;
 }
 
-void setBit(T)(ref T var, T bit, bool b)
-{
-	if(b)	var |=	bit;
-	else	var &=	~bit;
-}
-
-auto setFlag(string f, string b, uint bit)
-{
-	return format(`%1$s = %1$s ^ ((-typeof(%1$s)(%2$s) ^ %1$s) & %3$s);`, f, b, bit);
-}
-
 void byFlag(T)(ref T v, uint bit, bool st)
 {
 	v ^= (-int(st) ^ v) & bit;
@@ -186,6 +168,18 @@ void byFlag(T)(ref T v, uint bit, bool st)
 
 @property
 {
+	auto toFloats(ubyte N)(in int[N] arr)
+	{
+		float[N] res;
+
+		foreach(i, ref v; res)
+		{
+			v = arr[i] / 1000f;
+		}
+
+		return res;
+	}
+
 	auto toInts(ubyte N)(in float[N] arr)
 	{
 		int[N] res;
@@ -252,8 +246,8 @@ mixin template readableToString()
 		string r;
 		alias T = typeof(this);
 
-        import std.string : format;
-        import std.traits : FunctionTypeOf, Unqual;
+		import std.string : format;
+		import std.traits : FunctionTypeOf, Unqual;
 
 		foreach(m; __traits(allMembers, T))
 		{
@@ -269,8 +263,8 @@ mixin template readableToString()
 
 mixin template createCtorsDtors(A...)
 {
-    void ctors() { foreach(ref a; A) if(!a) a = new typeof(a); }
-    void dtors() { foreach_reverse(a; A) a.destroy; }
+	void ctors() { foreach(ref a; A) if(!a) a = new typeof(a); }
+	void dtors() { foreach_reverse(a; A) a.destroy; }
 }
 
 mixin template publicProperty(T, string name, string value = null)
@@ -287,7 +281,7 @@ mixin template makeHelpers(A...)
 	{
 		string res;
 
-		foreach(i; IndexTuple!(A.length / 2))
+		static foreach(i; 0..A.length / 2)
 		{
 			auto n = A[i * 2], f = A[i * 2 + 1];
 
@@ -318,10 +312,53 @@ struct TimeMeter
 
 	~this()
 	{
-		log(`%s : %u ms`, _msg, systemTick - _t);
+		logger(`%s : %u ms`, _msg, systemTick - _t);
 	}
 
 private:
 	string _msg;
 	uint _t;
+}
+
+struct ScopeArray(T)
+{
+	this(size_t len)
+	{
+		_data = alloc.allocate(len * T.sizeof).as!T;
+	}
+
+	~this()
+	{
+		alloc.deallocate(_data);
+	}
+
+	inout opSlice()
+	{
+		return _data;
+	}
+
+	ref opIndex(size_t i) inout
+	{
+		return _data[i];
+	}
+
+	inout opSlice(size_t a, size_t b)
+	{
+		return _data[a..b];
+	}
+
+	@property opDollar(size_t dim : 0)()
+	{
+		return length;
+	}
+
+	@property length()
+	{
+		return _data.length;
+	}
+
+private:
+	T[] _data;
+
+	static FreeTree!Mallocator alloc;
 }

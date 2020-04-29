@@ -51,8 +51,8 @@ class CameraFPS : CameraBase
 		_pos = p;
 		_dir = t - p;
 
-		_tp = PE.onTickDiff.add(&onTick);
 		_tb = PE.onButton.add(&onButton);
+		_tp = PE.onTickDelta.add(&onTick);
 
 		recalcRes;
 	}
@@ -92,7 +92,7 @@ package:
 	void onMove(Vector2s d)
 	{
 		auto pitch = Quaternion.fromAxis(AXIS_Y ^ _dir, d.y * rotateSpeed * TO_RAD);
-		auto heading = Quaternion.fromAxis(AXIS_Y, -d.x * rotateSpeed * TO_RAD);
+		auto heading = Quaternion.fromAxis(AXIS_Y, d.x * rotateSpeed * -TO_RAD);
 
 		_dir *= heading * pitch;
 
@@ -107,10 +107,10 @@ package:
 			return;
 		}
 
-		bool f = PEwindow.keys[SDL_SCANCODE_UP];
-		bool b = PEwindow.keys[SDL_SCANCODE_DOWN];
-		bool l = PEwindow.keys[SDL_SCANCODE_LEFT];
-		bool r = PEwindow.keys[SDL_SCANCODE_RIGHT], u;
+		bool f = PEwindow.keys.canFind(SDLK_UP);
+		bool b = PEwindow.keys.canFind(SDLK_DOWN);
+		bool l = PEwindow.keys.canFind(SDLK_LEFT);
+		bool r = PEwindow.keys.canFind(SDLK_RIGHT), u;
 
 		if(f)
 		{

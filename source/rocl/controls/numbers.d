@@ -59,7 +59,7 @@ private:
 
 		auto f =
 		{
-			e.remove;
+			e.deattach;
 		};
 
 		return PE.timers.add(f, t, TM_ONCE);
@@ -89,7 +89,7 @@ class Damage : GUIElement
 		_tp = tp;
 		_ids = n.to!string.map!(a => cast(ubyte)(a - '0')).array;
 
-		flags = WIN_BACKGROUND;
+		//flags.background = true;
 	}
 
 	override void draw(Vector2s p) const
@@ -142,7 +142,7 @@ private:
 
 	static vm()
 	{
-		return cast(ValueManager)ROgui.values;
+		return cast(ValueManager)RO.gui.values;
 	}
 
 	const perc()

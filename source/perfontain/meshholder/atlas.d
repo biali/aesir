@@ -5,7 +5,9 @@ import
 		std.algorithm,
 
 		perfontain,
-		perfontain.misc.pack;
+
+		stb.rectpack,
+		stb.rectpack.binding;
 
 
 final class AtlasHolderCreator : HolderCreator
@@ -50,7 +52,7 @@ private:
 
 			foreach(v; vs)
 			{
-				auto c = calcCoords(s.tex, *cast(Vector2 *)&v[$ - 2]);
+				auto c = calcCoords(s.tex, *cast(Vector2*)&v[$ - 2]);
 
 				data.vertices ~= v[0..$ - 2].toByte;
 				data.vertices ~= c.toByte;
@@ -61,31 +63,31 @@ private:
 	void makeAtlasTexture(ref HolderData f)
 	{
 		Vector2s sz;
-		auto ims = _texIndex.keys;
 
 		auto rgb = !(_flags & MH_DXT);
-		auto data = new stbrp_rect[ims.length];
+		auto data = new stbrp_rect[_texs.length];
 
 		{
 			uint sq;
 			auto func = rgb ? (int a) => cast(ushort)a : (int a) => alignTo(cast(ushort)a, 4);
 
-			foreach(uint i, ref s; data)
+			foreach(i, ref s; data)
 			{
-				s.id = i;
-				s.w = func(ims[i].w + ATLAS_PAD * 2);
-				s.h = func(ims[i].h + ATLAS_PAD * 2);
+				s.id = cast(uint)i;
+
+				s.w = func(_texs[i].w + ATLAS_PAD * 2);
+				s.h = func(_texs[i].h + ATLAS_PAD * 2);
 
 				sq += s.w * s.h;
 			}
 
-			sz = new TexPacker(data).process;
-			log.info(`texture atlas usage is %.4g, size is %ux%u`, sq / float(sz.x * sz.y), sz.x, sz.y);
+			sz = Vector2s(TexturePacker(data).process.expand);
+			logger.info(`texture atlas usage is %.4g, size is %ux%u`, sq / float(sz.x * sz.y), sz.x, sz.y);
 		}
 
 		auto atlas = new Image(sz.x, sz.y, null);
 
-		foreach(r, im; zip(data, ims.indexed(data.map!(a => a.id))))
+		foreach(r, im; zip(data, _texs.indexed(data.map!(a => a.id))))
 		{
 			assert(rgb || !(r.x & 3) && !(r.y & 3));
 
@@ -95,16 +97,16 @@ private:
 			atlas.blit(im, u, v);
 
 			// left line
-			ATLAS_PAD.iota.each!(a => atlas.blit(im.copy(0, 0, 1, im.h), r.x + a, v));
+			ATLAS_PAD.iota.each!(a => atlas.blit(im.subImage(0, 0, 1, im.h), r.x + a, v));
 
 			// right line
-			iota(r.w - im.w - ATLAS_PAD).each!(a => atlas.blit(im.copy(im.w - 1, 0, 1, im.h), u + im.w + a, v));
+			iota(r.w - im.w - ATLAS_PAD).each!(a => atlas.blit(im.subImage(im.w - 1, 0, 1, im.h), u + im.w + a, v));
 
 			// top
-			ATLAS_PAD.iota.each!(a => atlas.blit(atlas.copy(r.x, v, r.w, 1), r.x, r.y + a));
+			ATLAS_PAD.iota.each!(a => atlas.blit(atlas.subImage(r.x, v, r.w, 1), r.x, r.y + a));
 
 			// bottom
-			iota(r.h - im.h - ATLAS_PAD).each!(a => atlas.blit(atlas.copy(r.x, v + im.h - 1, r.w, 1), r.x, v + im.h + a));
+			iota(r.h - im.h - ATLAS_PAD).each!(a => atlas.blit(atlas.subImage(r.x, v + im.h - 1, r.w, 1), r.x, v + im.h + a));
 
 			Vector4 q;
 
@@ -119,10 +121,7 @@ private:
 
 		debug
 		{
-			auto im = atlas.dup;
-
-			im[].each!((ref a) => a.a = 255);
-			im.saveToFile(`atlas.png`, IM_PNG);
+			atlas.saveToFile(`atlas.png`);
 		}
 
 		add(f, atlas, false);

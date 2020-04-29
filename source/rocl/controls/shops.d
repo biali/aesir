@@ -68,14 +68,12 @@ final class WinShop : WinBasic
 		{
 			GUIElement[] arr;
 
-			foreach(u; [ MSG_BUYING, MSG_SELLING ])
+			foreach(u; only(MSG_BUYING, MSG_SELLING))
 			{
 				arr ~= new GUIStaticText(null, u);
 			}
 
-			auto k = arr.map!(a => a.size.x).fold!max;
-
-			_se = new SelectBox(this, arr, SELECT_ARROW, SCROLL_ARROW, cast(ushort)(k + 25), 0);
+			_se = new SelectBox(this, arr, 0);
 			_se.move(this, POS_MIN, 4, this, POS_MAX, (_se.size.y - WIN_BOTTOM_SZ.y) / 2);
 
 			_se.onChange = &retype;
@@ -93,9 +91,9 @@ final class WinShop : WinBasic
 			childs.popBack;
 		}
 
-		{
+		/*{
 			auto ty = WIN_TOP_SZ.y;
-			_sc = new Scrolled(this, Vector2s(size.x - 4, 36), cast(ushort)(size.y - ty - WIN_BOTTOM_SZ.y - 4) / 36, SCROLL_ARROW);
+			_sc = new Scrolled(this, Vector2s(size.x - 4, 36), cast(ushort)(size.y - ty - WIN_BOTTOM_SZ.y - 4) / 36);
 
 			_sc.pos = Vector2s(2, ty + 2);
 
@@ -118,11 +116,11 @@ final class WinShop : WinBasic
 
 			foreach(i; items.length.iota)
 			{
-				_sc.add(new ShopRow(this, arr[i], ps[i], priceW, _sc.elemWidth), true);
+				//_sc.add(new ShopRow(this, arr[i], ps[i], priceW, _sc.elemWidth), true);
 			}
-		}
+		}*/
 
-		auto b = new Button(this, BTN_PART, Buy ? MSG_BUY : MSG_SELL);
+		auto b = new Button(this, Buy ? MSG_BUY : MSG_SELL);
 		b.move(this, POS_MAX, -4, this, POS_MAX, (b.size.y - WIN_BOTTOM_SZ.y) / 2);
 		b.onClick = &onClick;
 
@@ -143,19 +141,19 @@ final class WinShop : WinBasic
 	}
 
 private:
-	void retype(short n)
+	void retype(int n)
 	{
 		ROnet.shopType(_id, cast(ubyte)n);
 	}
 
-	auto items()
+	ShopRow[] items()
 	{
-		return _sc.rows[].map!(a => cast(ShopRow)a).filter!(a => !!a.num.value);
+		return null; //_sc.rows[].map!(a => cast(ShopRow)a).filter!(a => !!a.num.value);
 	}
 
 	const buying()
 	{
-		return !_se.idx;
+		return !_se.selected;
 	}
 
 	void onClick()
@@ -198,7 +196,7 @@ final class ShopRow : GUIElement
 		item = m;
 		size = Vector2s(w, 36);
 
-		check = new CheckBox(this, CHECKBOX, CHECKBOX_SZ);
+		check = new CheckBox(this);
 
 		{
 			check.move(this, POS_MIN, 4, this, POS_CENTER);

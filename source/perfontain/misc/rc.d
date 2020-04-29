@@ -9,8 +9,8 @@ import
 
 		core.memory,
 
-		tt.misc,
-		tt.logger;
+		utils.misc,
+		utils.logger;
 
 
 //version = LOG_RC;
@@ -41,13 +41,24 @@ class RCounted
 		{
 			if(!_wasFreed)
 			{
-				log.error(`%s was never acquired`, this);
+				logger.error(`%s was never acquired`, this);
 			}
 		}
 	}
 
-	final acquire()
+final:
+	bool isRcAlive()
 	{
+		return !!_refs;
+	}
+
+	void acquire()
+	{
+		debug
+		{
+			assert(!_wasFreed);
+		}
+
 		_refs++;
 
 		version(LOG_RC)
@@ -61,7 +72,7 @@ class RCounted
 		}
 	}
 
-	final release()
+	void release()
 	{
 		assert(_refs);
 
@@ -315,19 +326,19 @@ void logLeaks()
 	{
 		if(rcLeaks.length)
 		{
-			log.error(`reference counting leaks:`);
-			log.ident++;
+			logger.error(`reference counting leaks:`);
+			logger.ident++;
 
 			foreach(k, v; rcLeaks)
 			{
-				log.warning(`%s - %u refs`, (cast(Object)k).toString, v);
+				logger.warning(`%s - %u refs`, (cast(Object)k).toString, v);
 			}
 
-			log.ident--;
+			logger.ident--;
 		}
 		else
 		{
-			log.info(`no reference counting leaks are found`);
+			logger.info(`no reference counting leaks are found`);
 		}
 	}
 }

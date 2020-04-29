@@ -18,16 +18,14 @@ class WinHotkeys : GUIElement
 {
 	this()
 	{
-		name = `hotkeys`;
-
-		super(PE.gui.root);
+		super(PE.gui.root, Vector2s.init, Win.none, `hotkeys`);
 
 		size = Vector2s(9, 4) * KS + Vector2s(SP + 10, SP);
-		flags = WIN_MOVEABLE;
+		flags.moveable = true;
 
 		if(pos.x < 0)
 		{
-			pos = PE.window.size - size - Vector2s(0, ROgui.chat.size.y);
+			pos = PE.window.size - size - Vector2s(0, RO.gui.chat.size.y);
 		}
 	}
 
@@ -58,7 +56,7 @@ class WinHotkeys : GUIElement
 		super.draw(p);
 	}
 
-	override void onMove()
+	override void onMoved()
 	{
 		auto p = PE.window.mpos - pos - Vector2s(SP);
 
@@ -127,44 +125,21 @@ class WinHotkeys : GUIElement
 		w.attach(this);
 		w.pos = posOf(q);
 
-		{
-			uint h;
-
-			if(q.y)
-			{
-				auto z = (q.y - 1) * 9 + q.x;
-
-				h = z >= hotkeys.length ? SDL_SCANCODE_COMMA + z - cast(uint)hotkeys.length : SDL_SCANCODE_A + hotkeys[z] - 'a';
-			}
-			else
-			{
-				h = SDL_SCANCODE_F1 + q.x;
-			}
-
-			auto f =
-			{
-				if(ROgui.chat.disabled)
-				{
-					w.use;
-				}
-			};
-
-			w.bind(new Hotkey(f, h));
-		}
-
 		if(p.x < 0)
 		{
 			ROnet.setHotkey(q.y * 9 + q.x, w.hotkey);
 		}
 
-		w.flags &= ~(WIN_TOP_MOST | WIN_BACKGROUND);
+		w.flags.topMost = false;
+		w.flags.captureFocus = true;
+
 		PE.gui.updateMouse;
 
 		foreach(e; childs[0..$ - 1])
 		{
 			if(e.pos == w.pos)
 			{
-				e.remove;
+				e.deattach;
 				break;
 			}
 		}
@@ -172,17 +147,21 @@ class WinHotkeys : GUIElement
 		return true;
 	}
 
-	static immutable hotkeys = `qwertyuioasdfghjklzxcvbnm`;
-
-//private:
-	static posOf(Vector2s p)
+	auto posToId(Vector2s p)
 	{
-		return p * KS + Vector2s(SP + 1);
+		p = fromPos(p);
+		return p.y * 9 + p.x;
 	}
 
+private:
 	static fromPos(Vector2s p)
 	{
 		return (p - Vector2s(SP + 1)) / KS;
+	}
+
+	static posOf(Vector2s p)
+	{
+		return p * KS + Vector2s(SP + 1);
 	}
 
 	enum

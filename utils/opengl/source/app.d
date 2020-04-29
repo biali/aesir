@@ -1,19 +1,4 @@
-import std.math;
-import std.conv;
-import std.file;
-import std.stdio;
-import std.regex;
-import std.range;
-import std.string;
-import std.base64;
-import std.process;
-import core.exception;
-import std.exception;
-import std.functional;
-import std.algorithm;
-import std.windows.charset;
-
-import core.exception;
+import std;
 
 
 auto extensionsUsed =
@@ -47,7 +32,7 @@ void main()
 
 	if(file.exists)
 	{
-		std.file.remove(file);
+		file.remove;
 	}
 
 	auto aa =
@@ -121,7 +106,6 @@ void main()
 		}
 	}
 
-
 	auto s = dirEntries(dir, `*.d`, SpanMode.depth).filter!(a => a != `opengl.d`).map!(a => a.name.readText).join;
 
 	string[] uf;
@@ -138,7 +122,7 @@ void main()
 	o.writeln("import\tstd.meta,
 		std.conv,
 
-		tt.error,
+		utils.except,
 		derelict.sdl2.sdl,
 
 		perfontain.opengl;\n\n");
@@ -199,15 +183,14 @@ __gshared extern(System) @nogc nothrow\n{");
 
 	o.writeln("}
 
-private:
+//private:
 
-pragma(inline, false)
+auto load(in char* name)
 {
-	auto load(in char *name)
-	{
-		auto ret = SDL_GL_GetProcAddress(name);
-		ret || throwError(`can't load opengl function: %s`, name.to!string);
-		return ret;
-	}
+	pragma(inline, false);
+
+	auto ret = SDL_GL_GetProcAddress(name);
+	ret || throwError(`can't load opengl function: %s`, name.to!string);
+	return ret;
 }");
 }

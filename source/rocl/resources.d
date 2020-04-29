@@ -21,15 +21,7 @@ import
 final class ResourcesManager
 {
 	this()
-	{
-		debug // TODO: NAME TO PATH
-		{}
-		else
-		{
-			auto data = PEfs.get(`data/ro.db`);
-			std.file.write(tempDir ~ `/pfstempdb`, data);
-		}
-	}
+	{}
 
 	~this()
 	{
@@ -83,12 +75,12 @@ final class ResourcesManager
 	void load(string name)
 	{
 		auto t = TimeMeter(`loading map %s`, name);
-		auto r = ROdb.query!string(format(`select value from map_names where id = '%s';`, name));
+		auto r = ROdb.mapName(name);
 
 		with(PE.scene)
 		{
 			scene = null;
-			scene = RomLoader(r.length ? r[0][0] : name).process(_map);
+			scene = RomLoader(r).process(_map);
 		}
 
 		RO.action.enable;

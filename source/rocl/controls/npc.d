@@ -17,7 +17,7 @@ class WinNpc : GUIElement
 	{
 		super(PE.gui.root);
 
-		flags = WIN_MOVEABLE;
+		flags.moveable = true;
 	}
 
 	override void draw(Vector2s p) const
@@ -70,7 +70,7 @@ class WinNpcDialog : WinNpc
 		{
 			auto sz = size - NPC_WIN_SZ * 2 - Vector2s(0, BTN_PART_SZ.y + 6);
 
-			new ScrolledText(this, Vector2s(sz.x, sz.y / PE.fonts.base.height), SCROLL_ARROW);
+			new ScrolledText(this, Vector2s(sz.x, sz.y / PE.fonts.base.height));
 
 			text.pos = NPC_WIN_SZ;
 			text.autoBottom = false;
@@ -79,7 +79,7 @@ class WinNpcDialog : WinNpc
 
 	auto makeButton(string s)
 	{
-		auto b = new Button(this, BTN_PART, s);
+		auto b = new Button(this, s);
 
 		b.pos = size - b.size - Vector2s(NPC_WIN_SZ.x, 6);
 		b.focus;
@@ -102,29 +102,34 @@ class WinNpcSelect : WinNpc
 
 		{
 			auto h = PE.fonts.base.height;
-			auto w = new Scrolled(this, Vector2s(size.x - NPC_WIN_SZ.x * 2, h), 4, SCROLL_ARROW);
+			/*auto w = new Scrolled(this, Vector2s(size.x - NPC_WIN_SZ.x * 2, h), 4);
 
 			w.pos = NPC_WIN_SZ;
-			size.y = cast(short)(w.size.y + NPC_WIN_SZ.y * 2);
+			size.y = cast(short)(w.size.y + NPC_WIN_SZ.y * 2);*/
 
 			{
-				auto ds = new DialogSelector;
+				/*auto ds = new DialogSelector;
+				auto ew = w.elemWidth;
 
-				foreach(uint i, s; arr)
+				foreach(i, s; arr)
 				{
-					auto dg =
+					foreach(ts; toStaticTexts(s, Vector2s(ew, -1)))
 					{
 						auto e = new SelectableItem(null, ds);
-						e.idx = i + 1;
 
-						return e;
-					};
+						e.idx = cast(uint)i + 1;
+						e.size = Vector2s(ew, PE.fonts.base.height);
 
-					foreach(e; toStaticTexts(colorSplit(s), Vector2s(w.elemWidth, -1), dg))
-					{
+						alias dg = (a)
+						{
+							a.pos.y = 0;
+							a.attach(e);
+						};
+
+						ts.each!dg;
 						w.add(e, true);
 					}
-				}
+				}*/
 			}
 		}
 
@@ -135,11 +140,11 @@ class WinNpcSelect : WinNpc
 
 	void delegate(ubyte) onSelect;
 private:
-	class DialogSelector : Selector
+	/*class DialogSelector : Selector
 	{
 		override void select(int idx)
 		{
 			onSelect(cast(ubyte)idx);
 		}
-	}
+	}*/
 }

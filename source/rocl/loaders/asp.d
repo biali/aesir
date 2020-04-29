@@ -1,13 +1,7 @@
 module rocl.loaders.asp;
 
 import
-		std.file,
-		std.conv,
-		std.stdio,
-		std.array,
-		std.string,
-		std.typecons,
-		std.exception,
+		std,
 
 		perfontain,
 		perfontain.nodes.sprite,
@@ -16,7 +10,9 @@ import
 		ro.conv.asp,
 
 		rocl.game,
-		rocl.paths;
+		rocl.paths,
+
+		utils.logger;
 
 
 enum : ubyte
@@ -65,7 +61,7 @@ auto loadASP(in AspLoadInfo r)
 {
 	SpriteObject res;
 
-	log.info3(`loading sprite: %s`, r);
+	logger.info3(`loading sprite: %s`, r);
 
 	string	path,
 			kpath;
@@ -82,7 +78,7 @@ auto loadASP(in AspLoadInfo r)
 
 		if(id < 45 || id >= 4000 && id < 6000)
 		{
-			auto name = ROdb.query!string(format(`select name from jobs where id = %u;`, id)).front[0];
+			auto name = ROdb.jobName(id);
 
 			path = jobPath(id, r.gender);
 			kpath = format(`data/sprite/인간족/몸통/%1$s/%2$s_%1$s`, r.gender.koreanSex, name);
@@ -102,8 +98,6 @@ auto loadASP(in AspLoadInfo r)
 		break;
 
 	case ASP_HEAD:
-		id = ROdb.hair(id, r.gender);
-
 		path = headPath(id, r.gender, r.palette);
 		kpath = format(`data/sprite/인간족/머리통/%1$s/%2$u_%1$s`, r.gender.koreanSex, id);
 
@@ -145,7 +139,7 @@ auto loadASP(in AspLoadInfo r)
 		}
 		catch(Exception e)
 		{
-			log.error(e.msg);
+			logger.error(e.msg);
 		}
 	}
 

@@ -11,8 +11,8 @@ final class ShadowManager
 {
 	this()
 	{
-		PE.onAspect.permanent(_ => onUpdate);
-		PE.settings.shadowsChange.permanent(_ => onUpdate);
+		PE.onResize.permanent(_ => update);
+		PE.settings.shadowsChange.permanent(_ => update);
 
 		_bias = Matrix4.scale(VEC3_2) * Matrix4.translate(VEC3_2);
 	}
@@ -82,7 +82,7 @@ private:
 		return PE.settings.shadows;
 	}
 
-	void onUpdate()
+	void update()
 	{
 		if(level)
 		{
@@ -90,7 +90,7 @@ private:
 				auto k = 2 ^^ (level - 1);
 				auto sz = Vector2s(PE.window.size.flat[].reduce!max * k / 4);
 
-				log.info(`shadow map size: %s`, sz);
+				logger.info(`shadow map size: %s`, sz);
 
 				auto tex = new Texture(TEX_SHADOW_MAP, sz);
 				tex.bind(1);
