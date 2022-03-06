@@ -1,26 +1,12 @@
 module rocl.entity.actor;
-
-import
-		std.algorithm,
-
-		perfontain,
-
-		ro.grf,
-		ro.path,
-
-		rocl.game,
-		rocl.status,
-		rocl.network,
-		rocl.entity.misc,
-		rocl.loaders.asp,
-		rocl.entity.visual;
-
+import std.algorithm, perfontain, ro.grf, ro.path, rocl.game, rocl.status, rocl.network, rocl.entity.misc,
+	rocl.loaders.asp, rocl.entity.visual;
 
 abstract class Actor : RCounted
 {
-	static Actor create(ref in ActorInfo p)
+	static Actor create(in ActorInfo p)
 	{
-		final switch(p.type)
+		final switch (p.type)
 		{
 		case BL_PC:
 			return new Player(p);
@@ -31,16 +17,18 @@ abstract class Actor : RCounted
 		}
 	}
 
-	this(ref in ActorInfo p)
+	this(in ActorInfo p)
 	{
 		bl = p.bl;
-		name = p.name.charsToString;
+		name = p.name;
 
 		ent = new Entity(p.class_, p.type, _gender = !!p.gender);
 		ent.speed = p.speed;
 	}
 
-	void changeLook(ubyte, ushort) {}
+	void changeLook(ubyte, ushort)
+	{
+	}
 
 	string cleanName() const
 	{
@@ -52,12 +40,12 @@ abstract class Actor : RCounted
 		return false;
 	}
 
-	void doAttack(ref in Pk08c8 p)
+	void doAttack(in Pk08c8 p)
 	{
-		if(!ROent.doActor(p.dstId, &onDir))
+		if (!ROent.doActor(p.dstId, &onDir))
 		{
 			ent.dir = 0;
-			logger(`no dir %s %s`, p.dstId, ROent.self.bl);
+			logger.msg!`no dir %s %s`(p.dstId, ROent.self.bl);
 		}
 
 		ent.act(Action.attack, Action.readyFight, cast(ushort)p.srcSpeed);
@@ -82,7 +70,7 @@ abstract class Actor : RCounted
 package:
 	void onDir(Actor a)
 	{
-		with(ent)
+		with (ent)
 		{
 			dir = direction(a.pos2 - pos2, true);
 		}
@@ -93,7 +81,7 @@ package:
 
 final class Mob : Actor
 {
-	this(ref in ActorInfo p)
+	this(in ActorInfo p)
 	{
 		super(p);
 	}
@@ -107,7 +95,7 @@ final class Mob : Actor
 
 final class Npc : Actor
 {
-	this(ref in ActorInfo p)
+	this(in ActorInfo p)
 	{
 		super(p);
 	}
@@ -121,7 +109,7 @@ final class Npc : Actor
 	override string cleanName() const
 	{
 		auto k = name.toByte.countUntil('#');
-		auto r = k < 0 ? name : name[0..k];
+		auto r = k < 0 ? name : name[0 .. k];
 
 		return r.length ? r : `???`;
 	}
@@ -129,26 +117,26 @@ final class Npc : Actor
 
 final class Player : Actor
 {
-	this(ref in ActorInfo p)
+	this(in ActorInfo p)
 	{
 		super(p);
 
-		if(auto id = p.hairStyle)
+		if (auto id = p.hairStyle)
 		{
 			ent.add(SPR_HEAD, AspLoadInfo(id, 0, ASP_HEAD, !!p.gender, cast(ubyte)p.hairColor));
 		}
 
-		if(auto id = p.headTop)
+		if (auto id = p.headTop)
 		{
 			changeLook(LOOK_HEAD_TOP, id);
 		}
 
-		if(auto id = p.headMiddle)
+		if (auto id = p.headMiddle)
 		{
 			changeLook(LOOK_HEAD_MID, id);
 		}
 
-		if(auto id = p.headBottom)
+		if (auto id = p.headBottom)
 		{
 			changeLook(LOOK_HEAD_BOTTOM, id);
 		}
@@ -158,7 +146,7 @@ final class Player : Actor
 
 	override void changeLook(ubyte type, ushort id)
 	{
-		switch(type)
+		switch (type)
 		{
 		case LOOK_HEAD_TOP:
 			ent.add(SPR_HEAD_TOP, AspLoadInfo(id, 0, ASP_HEAD_TOP, _gender));

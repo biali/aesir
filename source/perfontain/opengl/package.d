@@ -1,55 +1,47 @@
 module perfontain.opengl;
+import std, utile.logger, utile.except;
+public import perfontain.opengl.functions;
 
-import
-		std.conv,
-		std.algorithm,
-
-		utils.logger;
-
-public import
-				perfontain.opengl.functions;
-
+uint gen(alias F)()
+{
+	uint id;
+	F(1, &id);
+	return id;
+}
 
 debug:
 package:
 
-void enableDebug()
+string dumpArgs(A...)(A args)
 {
-	glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS_ARB);
-	glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, null, false);
+	string dump;
 
-	glDebugMessageControl(GL_DONT_CARE, GL_DEBUG_TYPE_ERROR, GL_DONT_CARE, 0, null, true);
-	glDebugMessageControl(GL_DONT_CARE, GL_DEBUG_TYPE_PORTABILITY, GL_DONT_CARE, 0, null, true);
-	//glDebugMessageControl(GL_DONT_CARE, GL_DEBUG_TYPE_PERFORMANCE, GL_DONT_CARE, 0, null, true);
-	glDebugMessageControl(GL_DONT_CARE, GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR, GL_DONT_CARE, 0, null, true);
-	glDebugMessageControl(GL_DONT_CARE, GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR, GL_DONT_CARE, 0, null, true);
-
-	glDebugMessageCallback(&debugCallback, null);
-}
-
-void checkError(string func, string file, uint line)
-{
-	if(error.length)
+	foreach (e; args)
 	{
-		if(!errors.canFind(error))
+		dump ~= dump ? `, ` : null;
+
+		static if (isPointer!(typeof(e)))
 		{
-			errors ~= error;
-			logger.warning(`[%s:%u]: %s - %s`, file, line, func, error);
+			dump ~= format(`0x%X`, cast(size_t)e);
 		}
-
-		error = null;
+		else
+			dump ~= e.to!string;
 	}
+
+	return dump;
 }
 
-private:
-
-extern(System) void debugCallback(uint source, uint type, uint id, uint severity, uint length, in char *message, in void *userParam) nothrow
+void traceGL(A...)(string func, string file, uint line, A args)
 {
-	error = message.to!string;
+	//logger.info3!`[%s:%u] %s(%s)`(file, line, func, dumpArgs(args));
 }
 
-__gshared
+void checkError(A...)(string func, string file, uint line, A args)
 {
-	string error;
-	string[] errors;
+	auto err = glGetError();
+
+	if (err)
+	{
+		logger.error!`[%s:%u] %s(%s) - ERROR 0x%X`(file, line, func, dumpArgs(args), err);
+	}
 }

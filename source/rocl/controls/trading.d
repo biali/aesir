@@ -1,178 +1,166 @@
 module rocl.controls.trading;
 
-import
-		std.conv,
-		std.ascii,
+import std.conv, std.ascii, perfontain, ro.conv.gui, rocl, rocl.game,
+	rocl.status, rocl.status.item;
 
-		perfontain,
+// final:
 
-		ro.conv.gui,
+// class WinTrading : WinBasic2
+// {
+// 	this()
+// 	{
+// 		super(MSG_DEALING_WITH, `trading`);
 
-		rocl,
-		rocl.game,
-		rocl.status,
-		rocl.status.item,
-		rocl.controls.status.equip;
+// 		new TradingPart(main);
+// 		new TradingPart(main);
 
+// 		dst.moveX(src, POS_ABOVE);
+// 		adjust;
 
-final:
+// 		{
+// 			new Button(bottom, MSG_OK);
+// 			ok.move(bottom, POS_MIN, 5, bottom, POS_CENTER);
 
-class WinTrading : WinBasic2
-{
-	this()
-	{
-		super(MSG_DEALING_WITH, `trading`);
+// 			ok.onClick =
+// 			{
+// 				{
+// 					auto v = src.zeny;
 
-		new TradingPart(main);
-		new TradingPart(main);
+// 					src.zeny(v);
+// 					ROnet.tradeItem(0, v);
+// 				}
 
-		dst.moveX(src, POS_ABOVE);
-		adjust;
+// 				ok.flags.enabled = false;
+// 				ROnet.tradeAction(0);
+// 			};
+// 		}
 
-		{
-			new Button(bottom, MSG_OK);
-			ok.move(bottom, POS_MIN, 5, bottom, POS_CENTER);
+// 		{
+// 			new Button(bottom, MSG_TRADE);
+// 			trade.move(bottom, POS_CENTER, 0, bottom, POS_CENTER);
 
-			ok.onClick =
-			{
-				{
-					auto v = src.zeny;
+// 			trade.onClick =
+// 			{
+// 				ROnet.tradeAction(1);
+// 				trade.flags.enabled = false;
+// 			};
 
-					src.zeny(v);
-					ROnet.tradeItem(0, v);
-				}
+// 			trade.flags.enabled = false;
+// 		}
 
-				ok.flags.enabled = false;
-				ROnet.tradeAction(0);
-			};
-		}
+// 		{
+// 			auto e = new Button(bottom, MSG_CANCEL);
+// 			e.move(bottom, POS_MAX, -5, bottom, POS_CENTER);
 
-		{
-			new Button(bottom, MSG_TRADE);
-			trade.move(bottom, POS_CENTER, 0, bottom, POS_CENTER);
+// 			e.onClick =
+// 			{
+// 				ROnet.tradeAction(-1);
+// 				e.flags.enabled = false;
+// 			};
+// 		}
 
-			trade.onClick =
-			{
-				ROnet.tradeAction(1);
-				trade.flags.enabled = false;
-			};
+// 		itemsSrc.onAdded.permanent(a => add(src.sc, a));
+// 		itemsDst.onAdded.permanent(a => add(dst.sc, a));
+// 	}
 
-			trade.flags.enabled = false;
-		}
+// 	void zeny(uint cnt)
+// 	{
+// 		dst.zeny(cnt);
+// 	}
 
-		{
-			auto e = new Button(bottom, MSG_CANCEL);
-			e.move(bottom, POS_MAX, -5, bottom, POS_CENTER);
+// 	void lock(bool self)
+// 	{
+// 		(self ? src : dst).locked = true;
 
-			e.onClick =
-			{
-				ROnet.tradeAction(-1);
-				e.flags.enabled = false;
-			};
-		}
+// 		if(src.locked && dst.locked)
+// 		{
+// 			trade.flags.enabled = true;
+// 		}
+// 	}
 
-		itemsSrc.onAdded.permanent(a => add(src.sc, a));
-		itemsDst.onAdded.permanent(a => add(dst.sc, a));
-	}
+// 	Items
+// 			itemsSrc,
+// 			itemsDst;
+// private:
+// 	// void add(Scrolled sc, Item m)
+// 	// {
+// 	// 	//auto e = new EquipSlot(null, m, sc.elemWidth);
+// 	// 	//sc.add(e, true);
+// 	// }
 
-	void zeny(uint cnt)
-	{
-		dst.zeny(cnt);
-	}
+// 	mixin MakeChildRef!(TradingPart, `src`, 1, 0);
+// 	mixin MakeChildRef!(TradingPart, `dst`, 1, 1);
 
-	void lock(bool self)
-	{
-		(self ? src : dst).locked = true;
+// 	mixin MakeChildRef!(Button, `ok`, 2, 0);
+// 	mixin MakeChildRef!(Button, `trade`, 2, 1);
 
-		if(src.locked && dst.locked)
-		{
-			trade.flags.enabled = true;
-		}
-	}
+// 	RCArray!Item _srcItems;
+// }
 
-	Items
-			itemsSrc,
-			itemsDst;
-private:
-	void add(Scrolled sc, Item m)
-	{
-		//auto e = new EquipSlot(null, m, sc.elemWidth);
-		//sc.add(e, true);
-	}
+// class TradingPart : GUIElement
+// {
+// 	this(GUIElement p)
+// 	{
+// 		super(p);
 
-	mixin MakeChildRef!(TradingPart, `src`, 1, 0);
-	mixin MakeChildRef!(TradingPart, `dst`, 1, 1);
+// 		//new Scrolled(this, Vector2s(220, 36), 4);
 
-	mixin MakeChildRef!(Button, `ok`, 2, 0);
-	mixin MakeChildRef!(Button, `trade`, 2, 1);
+// 		{
+// 			auto e = new GUIElement(this);
+// 			new Underlined(e);
 
-	RCArray!Item _srcItems;
-}
+// 			{
+// 				new GUIEditText(und);
 
-class TradingPart : GUIElement
-{
-	this(GUIElement p)
-	{
-		super(p);
+// 				edit.size.x = 80;
+// 				edit.onChar = a => a.length == 1 && a[0].isDigit && to!long(edit.value ~ a) <= RO.gui.inv.zeny;
 
-		//new Scrolled(this, Vector2s(220, 36), 4);
+// 				und.update;
+// 			}
 
-		{
-			auto e = new GUIElement(this);
-			new Underlined(e);
+// 			{
+// 				auto t = new GUIStaticText(e, `Ƶ`);
+// 				und.moveX(t, POS_ABOVE, 10);
+// 			}
 
-			{
-				new GUIEditText(und);
+// 			e.toChildSize;
+// 			e.move(sc, POS_MIN, 10, sc, POS_ABOVE, 2);
+// 		}
 
-				edit.size.x = 80;
-				edit.onChar = a => a.length == 1 && a[0].isDigit && to!long(edit.value ~ a) <= RO.gui.inv.zeny;
+// 		toChildSize;
+// 		size.y += 4;
+// 	}
 
-				und.update;
-			}
+// 	/*override void draw(Vector2s p) const
+// 	{
+// 		super.draw(p);
 
-			{
-				auto t = new GUIStaticText(e, `Ƶ`);
-				und.moveX(t, POS_ABOVE, 10);
-			}
+// 		if(locked)
+// 		{
+// 			drawQuad(p + pos, size, Color(128, 128, 128, 128)); // TODO: light gray
+// 		}
+// 	}*/
 
-			e.toChildSize;
-			e.move(sc, POS_MIN, 10, sc, POS_ABOVE, 2);
-		}
+// 	void zeny(uint z)
+// 	{
+// 		und.childs.clear;
 
-		toChildSize;
-		size.y += 4;
-	}
+// 		auto e = new GUIStaticText(und, price(z));
+// 		e.moveY(und, POS_MAX, -1);
+// 	}
 
-	override void draw(Vector2s p) const
-	{
-		super.draw(p);
+// 	auto zeny()
+// 	{
+// 		auto v = edit.value;
+// 		return v.length ? edit.value.to!uint : 0;
+// 	}
 
-		if(locked)
-		{
-			drawQuad(p + pos, size, Color(128, 128, 128, 128)); // TODO: light gray
-		}
-	}
+// 	bool locked;
 
-	void zeny(uint z)
-	{
-		und.childs.clear;
+// 	//mixin MakeChildRef!(Scrolled, `sc`, 0);
+// private:
+// 	mixin publicProperty!(uint, `zeny`);
 
-		auto e = new GUIStaticText(und, price(z));
-		e.moveY(und, POS_MAX, -1);
-	}
-
-	auto zeny()
-	{
-		auto v = edit.value;
-		return v.length ? edit.value.to!uint : 0;
-	}
-
-	bool locked;
-
-	mixin MakeChildRef!(Scrolled, `sc`, 0);
-private:
-	mixin publicProperty!(uint, `zeny`);
-
-	mixin MakeChildRef!(Underlined, `und`, 1, 0);
-	mixin MakeChildRef!(GUIEditText, `edit`, 1, 0, 0);
-}
+// 	//mixin MakeChildRef!(Underlined, `und`, 1, 0);
+// 	//mixin MakeChildRef!(GUIEditText, `edit`, 1, 0, 0);
+// }

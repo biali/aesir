@@ -1,89 +1,150 @@
 module perfontain.managers.settings;
+import std, perfontain, perfontain.opengl, perfontain.managers.shadow, utile.encrypt;
 
-import
-		std,
-
-		perfontain,
-		perfontain.opengl,
-
-		perfontain.managers.shadow;
-
-public import
-				perfontain.managers.settings.data;
-
+public import perfontain.managers.settings.data;
 
 final class SettingsManager
 {
 	this()
 	{
-		auto j = PEfs.get(SETTINGS_FILE)
-										.assumeUTF
-										.parseJSON
-										.ifThrown(JSONValue.init);
+		auto data = PEfs.get(SETTINGS_FILE);
+		rc4.process(data);
 
-		{
-			static foreach(s; [ `lights`, `shadows` ])
-			{
-				collectException(mixin(`_st.` ~ s) = cast(ubyte)j[s].integer);
-			}
-
-			with(_st)
-			{
-				if(lights > LIGHTS_FULL) lights = 0;
-				if(shadows > SHADOWS_ULTRA) shadows = 0;
-			}
-		}
-
-		static foreach(s; [ `fog`, `vsync`, `msaa`, `fullscreen`, `useBindless` ])
-		{
-			collectException(mixin(`_st.` ~ s) = j[s].type == JSONType.true_);
-		}
+		if (data.empty || !data.isValid)
+			return;
 
 		try
 		{
-			foreach(name, w; j[`wins`].object)
-			{
-				collectException(_st.wins[name] = WindowData(Vector2s(w[`x`].integer, w[`y`].integer)));
-			}
+			auto json = data.assumeUTF.parseJSON;
 
-			foreach(name, arr; j[`hotkeys`].object)
+			static foreach (name; settingNames)
 			{
-				collectException(_st.hotkeys[name] = arr.array.map!(a => cast(SDL_Keycode)a.integer).array);
+				try
+				{
+					load(json[name], mixin(name));
+				}
+				catch (Exception e)
+				{
+					logger.error!`cannot parse setting %s: %s`(name, e.msg);
+				}
 			}
 		}
-		catch(Exception)
-		{}
-	}
-
-	void disableUnsupported()
-	{
-		_st.useBindless &= GL_ARB_bindless_texture;
-		save;
+		catch (Exception ex)
+		{
+			logger.error!`cannot parse %s: %s`(SETTINGS_FILE, ex.msg);
+		}
 	}
 
 	~this()
 	{
-		save;
-	}
+		JSONValue json;
 
-	mixin(genSettings);
-private:
-	const save()
-	{
-		JSONValue j;
-
-		static foreach(s; [ `fog`, `vsync`, `msaa`, `fullscreen`, `useBindless`, `lights`, `shadows`, `hotkeys` ])
+		static foreach (name; settingNames)
 		{
-			j[s] = mixin(`_st.` ~ s);
+			json[name] = jsonize(mixin(name));
 		}
 
-		j[`wins`] = _st.wins
-							.byKeyValue
-							.map!(a => tuple(a.key, [ `x` : a.value.pos.x, `y`: a.value.pos.y ].JSONValue))
-							.assocArray;
+		auto data = json.toJSON.representation.dup;
+		rc4.process(data);
 
-		PEfs.put(SETTINGS_FILE, j.toJSON);
+		PEfs.put(SETTINGS_FILE, data);
 	}
 
-	Settings _st;
+	mixin Setting!(bool, `fog`, true);
+	mixin Setting!(bool, `vsync`, true);
+	mixin Setting!(bool, `msaa`, false);
+	mixin Setting!(bool, `fullscreen`, false);
+
+	mixin Setting!(Lights, `lights`, Lights.global);
+	mixin Setting!(Shadows, `shadows`, Shadows.medium);
+
+	Tuple!(string, `user`, string, `pass`)[] accounts;
+private:
+	static settingNames() // TODO: BUGREPORT
+	{
+		string[] arr;
+
+		foreach (name; __traits(allMembers, typeof(this)))
+			if (is(typeof(mixin(name).offsetof)) && !name.endsWith(`Change`)) // TODO: more elegant way
+				arr ~= name;
+
+		return arr;
+	}
+
+	static jsonize(T)(T value)
+	{
+		static if (isDynamicArray!T)
+		{
+			return value.map!jsonize.array.JSONValue;
+		}
+		else
+		{
+			static if (isTuple!T)
+			{
+				JSONValue[string] aa;
+
+				static foreach (i, name; T.fieldNames)
+				{
+					aa[name] = value[i].JSONValue;
+				}
+
+				return JSONValue(aa);
+			}
+			else
+				return JSONValue(value);
+		}
+	}
+
+	static load(T)(in JSONValue json, ref T value)
+	{
+		static if (is(T == string))
+		{
+			value = json.str;
+		}
+		else static if (isTuple!T)
+		{
+			T v;
+
+			static foreach (i, name; T.fieldNames)
+			{
+				{
+					T.Types[i] u;
+					load(json[name], u);
+					v[i] = u;
+				}
+			}
+
+			value = v;
+		}
+		else static if (isDynamicArray!T)
+		{
+			T arr;
+
+			foreach (j; json.array)
+			{
+				ElementType!T e;
+				load(j, e);
+				arr ~= e;
+			}
+
+			value = arr;
+		}
+		else static if (is(T == enum))
+		{
+			auto k = json.integer;
+
+			if (only(EnumMembers!T).canFind(k))
+			{
+				value = cast(T)k;
+			}
+		}
+		else static if (isBoolean!T)
+		{
+			value = json.boolean;
+		}
+		else
+			static assert(false);
+	}
+
+	static rc4() => RC4(thisExePath);
 }

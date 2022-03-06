@@ -1,0 +1,84 @@
+name: Build deps
+
+on:
+  push:
+    paths:
+      - .github/workflows/build-deps.yml
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-20.04
+            lib: libSDL2.a
+            compiler: clang
+          - os: windows-latest
+            lib: SDL2.lib
+            compiler: cl
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - id: sdl_version
+        uses: oprypin/find-latest-tag@v1
+        with:
+          repository: libsdl-org/SDL
+
+      - uses: actions/checkout@v2
+        with:
+          repository: libsdl-org/SDL
+          ref: ${{ steps.sdl_version.outputs.tag }}
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - if: ${{ matrix.os == 'ubuntu-20.04' }}
+        run: sudo apt install -y ninja-build libxi-dev libgl1-mesa-dev libasound2-dev libxrandr-dev
+
+      - run: |
+          mkdir build
+      - working-directory: build
+        run: >
+          cmake -G Ninja -DCMAKE_C_COMPILER=${{ matrix.compiler }} -DCMAKE_CXX_COMPILER=${{ matrix.compiler }} -DCMAKE_BUILD_TYPE=Release
+          -DSDL_ATOMIC_ENABLED_BY_DEFAULT=OFF
+          -DSDL_RENDER_ENABLED_BY_DEFAULT=OFF
+          -DSDL_HAPTIC_ENABLED_BY_DEFAULT=OFF
+          -DSDL_POWER_ENABLED_BY_DEFAULT=OFF
+          -DSDL_TIMERS_ENABLED_BY_DEFAULT=OFF
+          -DSDL_FILE_ENABLED_BY_DEFAULT=OFF
+          -DSDL_CPUINFO_ENABLED_BY_DEFAULT=OFF
+          -DSDL_FILESYSTEM_ENABLED_BY_DEFAULT=OFF
+          -DSDL_SENSOR_ENABLED_BY_DEFAULT=OFF
+          -DSDL_LOCALE_ENABLED_BY_DEFAULT=OFF
+          -D3DNOW=OFF -DMMX=OFF -DSSE=OFF -DSSE2=OFF -DASSERTIONS=disabled
+          -DBUILD_SHARED_LIBS=OFF -DFORCE_STATIC_VCRT=ON -DSDL_STATIC_PIC=ON -DLIBC=ON -DVIDEO_OPENGL=OFF -DVIDEO_VULKAN=OFF -DVIDEO_DUMMY=OFF -DDIRECTX=OFF
+          ..
+
+          ninja -v
+      - uses: actions/upload-artifact@v2
+        with:
+          path:
+            build/${{ matrix.lib }}
+
+  commit:
+    runs-on: ubuntu-20.04
+    needs: [ build ]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: master
+
+      - uses: actions/download-artifact@v2
+
+      - run: |
+          mv artifact/SDL2.lib utils/deps/sdl_x64.lib
+          mv artifact/libSDL2.a utils/deps/libsdl_x64.a
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add -u
+          git commit -m generated
+          git push

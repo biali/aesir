@@ -1,32 +1,16 @@
 module perfontain.vbo;
-
-import
-		std.stdio,
-		std.algorithm,
-
-		perfontain,
-		perfontain.misc,
-		perfontain.config,
-		perfontain.opengl,
-		perfontain.math.matrix,
-
-		utils.except;
-
+import std.stdio, std.algorithm, perfontain, perfontain.misc, perfontain.config, perfontain.opengl, perfontain.math.matrix, utile.except;
 
 enum
 {
-	VBO_DYNAMIC		= 1,
+	VBO_DYNAMIC = 1,
 }
 
 final class VertexBuffer : RCounted
 {
 	this(byte type = -1, ubyte flags = 0)
 	{
-		{
-			uint b;
-			glCreateBuffers(1, &b);
-			id = b;
-		}
+		id = gen!glGenBuffers;
 
 		_type = type;
 		_flags = flags;
@@ -44,29 +28,29 @@ final class VertexBuffer : RCounted
 
 	void update(in void[] data, uint start)
 	{
-		glNamedBufferSubData(id, start, data.length, data.ptr);
+		bind;
+		glBufferSubData(typeGL, start, data.length, data.ptr);
 	}
 
-	void realloc(uint len, in void *ptr = null)
+	void realloc(in void[] data) => realloc(cast(uint)data.length, data.ptr);
+
+	void realloc(uint len, in void* ptr = null)
 	{
-		glNamedBufferData(id, _length = len, ptr, _flags & VBO_DYNAMIC ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
+		bind;
+		glBufferData(typeGL, _length = len, ptr, _flags & VBO_DYNAMIC ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
 	}
 
-	void bind()
+	void enable()
 	{
-		if(untyped)
-		{
-			return glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, id);
-		}
+		bind;
 
-		glBindBuffer(GL_ARRAY_BUFFER, id);
-
-		ubyte	ptr,
-				size = _type.vertexSize;
+		if (untyped)
+			return;
 
 		auto arr = renderLoc[_type];
+		ubyte ptr, size = _type.vertexSize;
 
-		foreach(i, v; arr)
+		foreach (i, v; arr)
 		{
 			auto r = cast(uint)i;
 
@@ -77,8 +61,20 @@ final class VertexBuffer : RCounted
 		}
 	}
 
+	void bind(ubyte idx) => glBindBufferBase(GL_SHADER_STORAGE_BUFFER, idx, id);
+
 	const uint id;
 private:
+	void bind()
+	{
+		glBindBuffer(typeGL, id);
+	}
+
+	auto typeGL()
+	{
+		return untyped ? GL_ELEMENT_ARRAY_BUFFER : GL_ARRAY_BUFFER;
+	}
+
 	mixin publicProperty!(byte, `type`);
 	mixin publicProperty!(uint, `length`);
 

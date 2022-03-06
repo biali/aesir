@@ -68,6 +68,11 @@ enum MESSAGES =
 	[ `BASE_LVL`, `Base lvl`, `Баз. ур.` ],
 	[ `JOB_LVL`, `Job lvl`, `Проф. ур.` ],
 
+	[`SPEED`, `Speed`, `Скорость`],
+	[`STAT_POINTS`, `Status points`, `Очки статуса`],
+	[`STAT_COSTS`, `Costs %u points`, `Расходует %u очков статуса`],
+
+	[ `STATS`, `Stats`, `Характеристики` ],
 	[ `EQUIPMENT`, `Equipment`, `Экипировка` ],
 	[ `HEAD`, `Head`, `Голова` ],
 	[ `ARMOR`, `Armor`, `Броня` ],
@@ -111,6 +116,17 @@ enum MESSAGES =
 
 	[ `ITM`, `Item`, `Предм.` ],
 	[ `ETC`, `Etc`, `Проч.` ],
+
+	[ `CHAT`, `Chat`, `Чат` ],
+	[ `SUBMIT`, `Submit`, `Отправить` ],
+
+	[ `QUIT`, `Quit`, `Выйти` ],
+	[ `LOGIN`, `Login`, `Вход` ],
+	[ `USERNAME`, `Username`, `Логин` ],
+	[ `PASSWORD`, `Password`, `Пароль` ],
+	[ `ADD`, `Add`, `Добавить` ],
+	[ `REMOVE`, `Remove`, `Удалить` ],
+	[ `ADDING`, `Adding`, `Добавление` ],
 
 	//[ ``, ``, `` ],
 ];

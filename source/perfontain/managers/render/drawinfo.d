@@ -1,12 +1,9 @@
 module perfontain.managers.render.drawinfo;
-
-import
-		perfontain;
-
+import perfontain;
 
 enum
 {
-	DI_NO_DEPTH		= 1,
+	DI_NO_DEPTH = 1,
 }
 
 struct DrawInfo
@@ -15,22 +12,20 @@ struct DrawInfo
 	MeshHolder mh;
 
 	Matrix4 matrix;
-
-	uint	lightStart,
-			lightEnd;
+	Vector4s scissor;
 
 	Color color = colorWhite;
 	ushort id;
 
-	ubyte	flags,
-			blendingMode = noBlending;
+	ubyte flags, blendingMode = noBlending;
 package:
 	static diff(string val, string cmp = `<`, string as = ``)
 	{
-		return `if(` ~ as ~ `(a.` ~ val ~ `) != ` ~ as ~ `(b.` ~ val ~ `)) return ` ~ as ~ `(a.` ~ val ~ `) ` ~ cmp ~ as ~ `(b.` ~ val ~ `);`;
+		return `if(` ~ as ~ `(a.` ~ val ~ `) != ` ~ as ~ `(b.` ~ val ~ `)) return ` ~ as ~ `(a.` ~ val ~ `) ` ~ cmp ~ as ~ `(b.` ~ val
+			~ `);`;
 	}
 
-	static cmp(ref in DrawInfo a, ref in DrawInfo b)
+	static cmp(in DrawInfo a, in DrawInfo b)
 	{
 		mixin(diff(`prog`, `<`, `cast(void*)`));
 		mixin(diff(`flags & DI_NO_DEPTH`));

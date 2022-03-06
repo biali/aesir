@@ -1,28 +1,9 @@
 module rocl.entity;
 
-import
-		std.stdio,
-		std.array,
-		std.format,
-		std.algorithm,
+import std.stdio, std.array, std.format, std.algorithm, perfontain, perfontain.math, perfontain.nodes.sprite, ro.grf,
+	ro.path, rocl.network, rocl.loaders.asp, ro.db, rocl.game, rocl.entity.actor;
 
-		perfontain,
-		perfontain.nodes.sprite,
-
-		ro.grf,
-		ro.path,
-		rocl.network,
-		rocl.loaders.asp,
-
-		ro.db,
-
-		rocl.game,
-		rocl.entity.actor;
-
-public import
-				rocl.entity.misc;
-
-
+public import rocl.entity.misc;
 
 final class EntityManager
 {
@@ -30,7 +11,7 @@ final class EntityManager
 	{
 		clearActors;
 
-		if(_self)
+		if (_self)
 		{
 			_self.release;
 		}
@@ -38,32 +19,33 @@ final class EntityManager
 
 	void process()
 	{
-		auto old = cur;
+		float p;
+		cur = null;
 
+		foreach (a; _actors)
 		{
-			float p;
-			cur = null;
+			a.process;
+			auto r = a.mouseLen;
 
-			foreach(a; _actors)
+			if (r != 0 && (r < p || !cur))
 			{
-				a.process;
-				auto r = a.mouseLen;
-
-				if(r != 0 && (r < p || !cur))
-				{
-					p = r;
-					cur = a;
-				}
+				p = r;
+				cur = a;
 			}
 		}
 
-		if(old ! is cur)
+		if (cur)
 		{
-			RO.action.makeTip(cur, true);
+			auto z = cur.ent.bbox * PE.scene.viewProject;
+			auto pos = project(z.min + Vector3(z.size.x / 2, 0, 0), PE.window.size).xy.Vector2s;
+
+			PopupText pt = {pos: pos, msg: cur.cleanName};
+
+			PE.gui.addPopup(pt);
 		}
 	}
 
-	auto createChar(in PkCharData *r, uint bl, bool gender)
+	auto createChar(in PkCharData* r, uint bl, bool gender)
 	{
 		auto pk = ActorInfo(*r);
 
@@ -82,11 +64,11 @@ final class EntityManager
 	{
 		clearActors;
 
-		if(RO.status.map != name)
+		if (RO.status.map != name)
 		{
 			ROres.load(RO.status.map = name);
 
-			if(RO.gui.isGame)
+			if (RO.gui.isGame)
 			{
 				_self.show;
 			}
@@ -96,9 +78,9 @@ final class EntityManager
 			RO.items.clear;
 		}
 
-		if(!RO.gui.isGame)
+		if (!RO.gui.isGame)
 		{
-			with(ROnet.st)
+			with (ROnet.st)
 			{
 				_self = createChar(curChar, accountId, gender);
 			}
@@ -109,7 +91,7 @@ final class EntityManager
 		_self.fix(pos.PosDir);
 	}
 
-	auto appear(ref in ActorInfo p)
+	auto appear(in ActorInfo p)
 	{
 		auto ac = Actor.create(p);
 
@@ -122,7 +104,7 @@ final class EntityManager
 
 	void remove(uint bl)
 	{
-		if(auto p = bl in _actors)
+		if (auto p = bl in _actors)
 		{
 			p.release;
 			_actors.remove(bl);
@@ -131,7 +113,7 @@ final class EntityManager
 
 	auto doActor(uint bl, void delegate(Actor) dg)
 	{
-		if(auto a = _actors.get(bl, null))
+		if (auto a = _actors.get(bl, null))
 		{
 			dg(a);
 			return true;
@@ -150,7 +132,7 @@ final class EntityManager
 private:
 	void add(Actor a)
 	{
-		if(auto p = _actors.get(a.bl, null))
+		if (auto p = _actors.get(a.bl, null))
 		{
 			p.release;
 		}
@@ -161,9 +143,9 @@ private:
 
 	void clearActors()
 	{
-		foreach(k, v; _actors.dup)
+		foreach (k, v; _actors.dup)
 		{
-			if(v ! is _self)
+			if (v !is _self)
 			{
 				v.release;
 				_actors.remove(k);

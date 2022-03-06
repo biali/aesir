@@ -1,24 +1,22 @@
 module perfontain.meshholder;
 
-import
-		std,
-
-		perfontain;
-
+import std, perfontain;
 
 final class MeshHolder : RCounted
 {
-	this(ref in HolderData v)
+	this(ubyte type, in SubMeshData data)
 	{
-		_iv = PE.render.drawAlloc[v.type].iv;
+		_iv = PE.render.drawAlloc[type].iv;
+		reg = _iv.alloc(data);
+	}
 
-		texs = v
-					.textures
-					.map!(a => new Texture(a))
-					.array;
+	this(in HolderData v)
+	{
+		this(v.type, v.data);
+
+		texs = v.textures.map!(a => new Texture(a)).array;
 
 		meshes = v.meshes;
-		reg = _iv.alloc(v.data);
 	}
 
 	~this()
@@ -29,10 +27,10 @@ final class MeshHolder : RCounted
 	const
 	{
 		RegionIV reg;
-
-		HolderMesh[] meshes;
-		RCArray!Texture texs;
 	}
+
+	RCArray!Texture texs;
+	const(HolderMesh)[] meshes;
 
 	const size()
 	{

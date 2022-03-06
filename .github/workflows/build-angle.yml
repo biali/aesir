@@ -1,0 +1,104 @@
+name: Build angle
+
+on:
+  push:
+    paths:
+      - .github/workflows/build-angle.yml
+  workflow_dispatch:
+
+env:
+  COMMON_OPTS: is_clang=true is_component_build=false is_cfi=false symbol_level=0 angle_enable_null=false
+
+jobs:
+  find_version:
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.main.outputs.version }}
+    steps:
+      - id: main
+        run: |
+          VER=$(wget -qO- http://omahaproxy.appspot.com/all.json | jq -r '.[] | select(.os == "win64") .versions[] | select(.channel == "stable") .true_branch')
+          echo "::set-output name=version::chromium/$VER"
+
+  build:
+    needs: find_version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-20.04
+            ext: so
+            SETUP_ENV: export PATH="$GITHUB_WORKSPACE/depot_tools:$PATH"
+          - os: windows-latest
+            ext: dll
+            SETUP_ENV: $env:DEPOT_TOOLS_WIN_TOOLCHAIN=0; $env:PATH += ";$env:GITHUB_WORKSPACE\depot_tools"
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - run: |
+          git clone --depth=1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
+          git clone --depth=1 https://chromium.googlesource.com/angle/angle.git -b ${{ needs.find_version.outputs.result }}
+
+      - working-directory: angle
+        run: |
+          ${{ matrix.SETUP_ENV }}
+
+          python scripts/bootstrap.py
+          gclient sync
+          git checkout ${{ needs.find_version.outputs.result }}
+          git apply -p1 ../utils/angle_fixes.patch
+
+      - if: ${{ matrix.os == 'ubuntu-20.04' }}
+        working-directory: angle
+        run:
+          ./build/install-build-deps.sh || true
+
+      - working-directory: angle
+        run: |
+          ${{ matrix.SETUP_ENV }}
+
+          gn gen out/Release --args="${{ env.COMMON_OPTS }} is_debug=false is_official_build=true chrome_pgo_phase=0 use_thin_lto=true init_stack_vars=false"
+          cd out/Release
+          ninja libEGL
+
+          cd ../..
+          gn gen out/Debug --args="${{ env.COMMON_OPTS }}"
+          cd out/Debug
+          ninja libEGL
+
+      - uses: actions/upload-artifact@v2
+        with:
+          path: |
+            angle/out/Debug/libEGL.${{ matrix.ext }}
+            angle/out/Debug/libGLESv2.${{ matrix.ext }}
+            angle/out/Release/libEGL.${{ matrix.ext }}
+            angle/out/Release/libGLESv2.${{ matrix.ext }}
+
+  commit:
+    runs-on: ubuntu-20.04
+    needs: [ build ]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: master
+
+      - uses: actions/download-artifact@v2
+
+      - run: |
+          strip -s artifact/*/*.so
+
+          mv artifact/Release/* bin/angle
+          mv artifact/Debug/*   bin/angle_debug
+
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add -u
+          git commit -m generated
+          git push

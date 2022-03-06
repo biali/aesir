@@ -1,20 +1,20 @@
-import
-		pegged.grammar;
+import pegged.grammar;
 
-
-enum EXGL =
-`
+enum EXGL = `
 EXGL:
 	Main		< Element{extract}+ eoi
 
 	Element		< Block / Idented(Plain{extract}){extract}
 
 	Block		<{endBlock} '\t'*{startBlock} Plain{extract} Element{extract}*
-	Plain		<- Shader / Cond / Vsfs / Assign / Name eol / Import / Define / Data
+	Plain		<- Shader / Cond / Vsfs / TexId / SsboId / Assign / Name eol / Import / Define / Data
 
 	Cond		< '!'? Name Block (:Idented("else") Block)?
 	Shader		< ;identifier ':' Block{extract}
-	Vsfs		< :"vsfs" ;identifier :Idented('{') Block Idented('}' ^identifier :';'){extract}
+	Vsfs		< :"vsfs" ;Data
+
+	TexId		< :"__TEX_ID__" ;Data
+	SsboId		< :"__SSBO_ID__" ;Data
 
 	Assign		< ;Name '+'? '=' ;Data
 	Import		< :"import" ;identifier
@@ -28,8 +28,7 @@ EXGL:
 	Spacing		<- (' ' / eol)*
 `;
 
-enum Extra =
-`
+enum Extra = `
 auto endBlock(ParseTree p)
 {
 	ident -= p.successful;

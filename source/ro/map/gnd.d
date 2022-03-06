@@ -1,33 +1,16 @@
 module ro.map.gnd;
-
-import
-		std.math,
-		std.conv,
-		std.array,
-		std.range,
-		std.string,
-		std.typecons,
-		std.algorithm,
-
-		perfontain,
-		perfontain.misc,
-		perfontain.math,
-
-		ro.grf,
-		ro.map,
-		ro.conf,
-		ro.conv,
-		ro.conv.map;
-
+import std.math, std.conv, std.array, std.range, std.string, std.typecons, std.algorithm, perfontain,
+	perfontain.misc, perfontain.math, ro.grf, ro.map, ro.conf, ro.conv, ro.conv.map, rocl.game;
 
 struct GndConverter
 {
-	this(string path, float level, float height)
+	this(RomConverter conv, RoPath path, float level, float height)
 	{
 		_waterLevel = level;
 		_waterHeight = height;
 
-		_gnd = PEfs.read!GndFile(path);
+		_conv = conv;
+		_gnd = ROfs.read!GndFile(path);
 	}
 
 	auto process()
@@ -35,22 +18,19 @@ struct GndConverter
 		MeshInfo[] res;
 		MeshInfo[32] water;
 
-		auto	tx = (_gnd.width + ROM_SPLIT_MAP - 1) / ROM_SPLIT_MAP,
-				ty = (_gnd.height + ROM_SPLIT_MAP - 1) / ROM_SPLIT_MAP;
+		auto tx = (_gnd.width + ROM_SPLIT_MAP - 1) / ROM_SPLIT_MAP, ty = (_gnd.height + ROM_SPLIT_MAP - 1) / ROM_SPLIT_MAP;
 
-		foreach(i; 0..tx)
+		foreach (i; 0 .. tx)
 		{
-			auto	x = i * ROM_SPLIT_MAP,
-					sx = min(_gnd.width - x, ROM_SPLIT_MAP);
+			auto x = i * ROM_SPLIT_MAP, sx = min(_gnd.width - x, ROM_SPLIT_MAP);
 
-			foreach(j; 0..ty)
+			foreach (j; 0 .. ty)
 			{
-				auto	y = j * ROM_SPLIT_MAP,
-						sy = min(_gnd.height - y, ROM_SPLIT_MAP);
+				auto y = j * ROM_SPLIT_MAP, sy = min(_gnd.height - y, ROM_SPLIT_MAP);
 
 				auto r = processSub(water, cast(ushort)x, cast(ushort)y, cast(ushort)sx, cast(ushort)sy);
 
-				if(r.subs.length)
+				if (r.subs.length)
 				{
 					res ~= r;
 				}
@@ -61,7 +41,7 @@ struct GndConverter
 	}
 
 private:
-	alias Subs = Vertex[][string];
+	alias Subs = Vertex[][RoPath];
 	alias Grid = Surface[][];
 
 	auto surfaceOf(ushort x, ushort y, ubyte idx)
@@ -69,7 +49,7 @@ private:
 		auto c = _gnd.cell(x, y);
 		auto sid = c.surfs[idx];
 
-		if(sid < 0)
+		if (sid < 0)
 		{
 			return Surface.init;
 		}
@@ -78,7 +58,7 @@ private:
 		// IDX 1 - вертикальная передняя поверхность
 		// IDX 2 - вертикальная правая боковая поверхность
 
-		if(idx == 1 && y == _gnd.height - 1 || idx == 2 && x == _gnd.width - 1)
+		if (idx == 1 && y == _gnd.height - 1 || idx == 2 && x == _gnd.width - 1)
 		{
 			// для передней поверхности необходима клетка перед ней || для боковой поверхности необходима клетка правее нее
 			return Surface.init;
@@ -86,35 +66,28 @@ private:
 
 		auto sur = &_gnd.surs[sid];
 
-		Surface res =
-		{
-			tex: _gnd.texs[sur.texId].name.convertName
-		};
+		Surface res = {tex: _gnd.texs[sur.texId].name};
 
-		foreach(i, ref v; res.va)
+		foreach (i, ref v; res.va)
 		{
 			float pz;
 
-			final switch(idx)
+			final switch (idx)
 			{
 			case 0:
 				pz = c.heights[i];
 				break;
 
 			case 1:
-				if(i < 2)
-				{
+				if (i < 2)
 					pz = c.heights[i + 2];
-				}
 				else
-				{
 					pz = _gnd.cell(x, y + 1).heights[i - 2];
-				}
 
 				break;
 
 			case 2:
-				switch(i)
+				switch (i)
 				{
 				case 0:
 					pz = c.heights[3];
@@ -150,19 +123,18 @@ private:
 
 	void combineImpl(Grid mg, ushort ei, ushort ej, ushort js = 0, byte d = 1, bool combineY = false)
 	{
-		foreach(ushort i; 0..ei)
+		foreach (ushort i; 0 .. ei)
 		{
-			for(ushort j = js; j != ej; j += d)
+			for (ushort j = js; j != ej; j += d)
 			{
 				auto x = j, y = i;
 
-				if(combineY)
+				if (combineY)
 				{
 					swap(x, y);
 				}
 
-				auto	a = &mg[x][y],
-						b = combineY ? &mg[x][y + d] : &mg[x + 1][y];
+				auto a = &mg[x][y], b = combineY ? &mg[x][y + d] : &mg[x + 1][y];
 
 				combineCells(a, b, combineY, d < 0);
 			}
@@ -171,10 +143,9 @@ private:
 
 	void optimizeGrid(Grid mg, ubyte side)
 	{
-		auto	sx = cast(ushort)mg.length,
-				sy = cast(ushort)mg[0].length;
+		auto sx = cast(ushort)mg.length, sy = cast(ushort)mg[0].length;
 
-		final switch(side)
+		final switch (side)
 		{
 		case 0:
 			combineImpl(mg, sx, cast(ushort)(sy - 1), 0, 1, true);
@@ -194,74 +165,71 @@ private:
 	{
 		Subs mi;
 
-		foreach(ubyte s; 0..3)
+		foreach (ubyte s; 0 .. 3)
 		{
 			auto grid = createArray!Surface(sx, sy);
 
-			foreach(j; 0..sy)
-			foreach(i; 0..sx)
-			{
-				auto	u = cast(ushort)(i + x),
-						v = cast(ushort)(j + y);
-
-				auto r = &(grid[i][j] = surfaceOf(u, v, s));
-
-				if(r.tex)
+			foreach (j; 0 .. sy)
+				foreach (i; 0 .. sx)
 				{
-					if(r.va[].any!(a => a.y < _waterLevel + _waterHeight))
+					auto u = cast(ushort)(i + x), v = cast(ushort)(j + y);
+
+					auto r = &(grid[i][j] = surfaceOf(u, v, s));
+
+					if (r.tex)
 					{
-						if(!water[0].subs)
+						if (r.va[].any!(a => a.y < _waterLevel + _waterHeight))
 						{
-							water.each!((ref a) => a.subs ~= SubMeshInfo.init);
+							if (!water[0].subs)
+							{
+								water.each!((ref a) => a.subs ~= SubMeshInfo.init);
+							}
+
+							auto vs = r.va;
+							auto arr = vs.toByte;
+							auto t = ROM_SCALE_DIV;
+
+							vs[0].t = Vector2((u + 0) % t / t, (v + 0) % t / t);
+							vs[1].t = Vector2((u + 1) % t / t, (v + 0) % t / t);
+							vs[2].t = Vector2((u + 0) % t / t, (v + 1) % t / t);
+							vs[3].t = Vector2((u + 1) % t / t, (v + 1) % t / t);
+
+							if (!vs[1].t.x)
+								vs[1].t.x = 1;
+							if (!vs[2].t.y)
+								vs[2].t.y = 1;
+
+							if (!vs[3].t.x)
+								vs[3].t.x = 1;
+							if (!vs[3].t.y)
+								vs[3].t.y = 1;
+
+							vs.each!((ref a) => a.y = _waterLevel);
+							water.each!((ref a) => a.subs[0].data.vertices ~= arr);
 						}
-
-						auto vs = r.va;
-						auto arr = vs.toByte;
-						auto t = ROM_SCALE_DIV;
-
-						vs[0].t = Vector2((u + 0) % t / t, (v + 0) % t / t);
-						vs[1].t = Vector2((u + 1) % t / t, (v + 0) % t / t);
-						vs[2].t = Vector2((u + 0) % t / t, (v + 1) % t / t);
-						vs[3].t = Vector2((u + 1) % t / t, (v + 1) % t / t);
-
-						if(!vs[1].t.x) vs[1].t.x = 1;
-						if(!vs[2].t.y) vs[2].t.y = 1;
-
-						if(!vs[3].t.x) vs[3].t.x = 1;
-						if(!vs[3].t.y) vs[3].t.y = 1;
-
-						vs.each!((ref a) => a.y = _waterLevel);
-						water.each!((ref a) => a.subs[0].data.vertices ~= arr);
 					}
 				}
-			}
 
-			static if(ROM_OPTIMIZE_GRID)
+			static if (ROM_OPTIMIZE_GRID)
 			{
 				optimizeGrid(grid, s);
 			}
 
-			foreach(ref c; grid.joiner.filter!(a => a.tex.length))
+			foreach (ref c; grid.joiner.filter!(a => a.tex.length))
 			{
-				mi[c.tex] ~= c.va;
+				mi[RoPath(c.tex)] ~= c.va;
 			}
 		}
 
 		MeshInfo mm;
 
-		foreach(t, vs; mi)
+		foreach (t, vs; mi)
 		{
-			SubMeshInfo sm =
-			{
-				tex: RomConverter.imageOf(`data/texture/` ~ t)
-			};
+			SubMeshInfo sm = {tex: _conv.imageOf(RoPath(`data/texture/`, t))};
 
-			with(sm.data)
+			with (sm.data)
 			{
-				vs = vs
-						.chunks(4)
-						.map!(a => chain(a[0..3], a[1..4].retro))
-						.join;
+				vs = vs.chunks(4).map!(a => chain(a[0 .. 3], a[1 .. 4].retro)).join;
 
 				vertices = vs.toByte;
 				indices = makeIndices(cast(uint)vs.length / 3);
@@ -270,7 +238,7 @@ private:
 				//minimize;
 				//unify;
 
-				if(indices.length)
+				if (indices.length)
 				{
 					mm.subs ~= sm;
 				}
@@ -280,19 +248,19 @@ private:
 		return mm;
 	}
 
-	static combineCells(Surface *a, Surface *b, bool combineY, bool lastSide)
+	static combineCells(Surface* a, Surface* b, bool combineY, bool lastSide)
 	{
-		if(b.tex != a.tex || !a.tex.length) return;
+		if (b.tex != a.tex || a.tex.empty)
+			return;
 
 		// drop tex's coord check for black texture
-		auto compCoord = icmp(a.tex, `backside.bmp`) != 0;
+		auto compCoord = true; // TODO: FIX FIX FIX icmp(a.tex, `backside.bmp`) != 0;
 
-		auto	va = a.va[],
-				vb = b.va[];
+		auto va = a.va[], vb = b.va[];
 
 		ubyte v_21, v_12;
 
-		if(lastSide || !combineY)
+		if (lastSide || !combineY)
 		{
 			v_21 = 1;
 			v_12 = 2;
@@ -304,20 +272,23 @@ private:
 		}
 
 		// positions check
-		if(!compareCoords(va[v_21].p, vb[0].p) || !compareCoords(va[3].p, vb[v_12].p)) return;
+		if (!compareCoords(va[v_21].p, vb[0].p) || !compareCoords(va[3].p, vb[v_12].p))
+			return;
 
 		// surface check
-		if(!arePointsOnOneLine(va[0].p, va[v_21].p, vb[v_21].p) || !arePointsOnOneLine(va[v_12].p, va[3].p, vb[3].p)) return;
+		if (!arePointsOnOneLine(va[0].p, va[v_21].p, vb[v_21].p) || !arePointsOnOneLine(va[v_12].p, va[3].p, vb[3].p))
+			return;
 
-		if(compCoord)
+		if (compCoord)
 		{
 			// texture coords check
-			if(!compareCoords(va[v_21].t, vb[0].t) || !compareCoords(va[3].t, vb[v_12].t)) return;
+			if (!compareCoords(va[v_21].t, vb[0].t) || !compareCoords(va[3].t, vb[v_12].t))
+				return;
 
 			bool sw;
 			auto f = va[v_21].v - va[0].v;
 
-			if(valueEqual(f, 0))
+			if (valueEqual(f, 0))
 			{
 				sw = true;
 				f = va[v_21].u - va[0].u;
@@ -331,20 +302,22 @@ private:
 			// calc a delta
 			f /= div / 2;
 
-			if(sw)
+			if (sw)
 			{
-				if(!valueEqual(va[v_21].u + f, vb[v_21].u)) return;
+				if (!valueEqual(va[v_21].u + f, vb[v_21].u))
+					return;
 			}
 			else
 			{
-				if(!valueEqual(va[v_21].v + f, vb[v_21].v)) return;
+				if (!valueEqual(va[v_21].v + f, vb[v_21].v))
+					return;
 			}
 		}
 
 		vb[0] = va[0];
 		vb[v_12] = va[v_12];
 
-		if(!compCoord)
+		if (!compCoord)
 		{
 			vb[0].t = Vector2(0, 0);
 			vb[1].t = Vector2(1, 0);
@@ -356,9 +329,9 @@ private:
 	}
 
 	GndFile _gnd;
+	RomConverter _conv;
 
-	float	_waterLevel,
-			_waterHeight;
+	float _waterLevel, _waterHeight;
 }
 
 // TODO: MOVE ALL THESE FUNCTIONS
@@ -368,7 +341,7 @@ auto toInts(in float[] arr)
 	return arr.map!(a => cast(int)lrint(a * 100)).array;
 }
 
-bool compareCoords(T)(ref in T a, ref in T b)
+bool compareCoords(T)(in T a, in T b)
 {
 	return a.flat.toInts[] == b.flat.toInts[];
 }
@@ -383,28 +356,20 @@ struct GndFile
 		ushort ver = 0x701;
 	}
 
-	uint
-			width,
-			height;
+	uint width, height;
 
 	static immutable float prop = 10;
 
-	uint
-			texturesCount,
-			texturePathLen;
+	uint texturesCount, texturePathLen;
 
-	@(`length`, `texturesCount`) GndTexture[] texs;
+	@ArrayLength!(e => e.that.texturesCount) GndTexture[] texs;
 
-	uint
-			lightsCount,
-			gridWidth,
-			gridHeight,
-			gridCells;
+	uint lightsCount, gridWidth, gridHeight, gridCells;
 
-	@(`length`, `lightsCount`) GndLightData[] ld;
+	@ArrayLength!(e => e.that.lightsCount) GndLightData[] ld;
 
-	@(`uint`) GndSurface[] surs;
-	@(`length`, `height * width`) GndCell[] cells;
+	@(ArrayLength!uint) GndSurface[] surs;
+	@(ArrayLength!(e => e.that.height * e.that.width)) GndCell[] cells;
 
 	const cell(uint x, uint y)
 	{
@@ -414,7 +379,7 @@ struct GndFile
 
 struct GndTexture
 {
-	@(`length`, `STRUCT.texturePathLen`) char[] name;
+	@(ArrayLength!(e => e.input.texturePathLen), ZeroTerminated) const(ubyte)[] name;
 }
 
 struct GndColor
@@ -446,28 +411,14 @@ struct GndCell
 
 struct Surface
 {
-	string tex;
+	const(ubyte)[] tex;
 	Vertex[4] va;
 }
 
-static immutable ubyte[4][2][3] posArray =
-[
+static immutable ubyte[4][2][3] posArray = [
 	/**
 	2 3
 	0 1
 	**/
-	[
-		[ 0, 1, 0, 1 ],
-		[ 0, 0, 1, 1 ]
-	],
-
-	[
-		[ 0, 1, 0, 1 ],
-		[ 1, 1, 1, 1 ],
-	],
-
-	[
-		[ 1, 1, 1, 1 ],
-		[ 1, 0, 1, 0 ],
-	]
+	[[0, 1, 0, 1], [0, 0, 1, 1]], [[0, 1, 0, 1], [1, 1, 1, 1],], [[1, 1, 1, 1], [1, 0, 1, 0],]
 ];

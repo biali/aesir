@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    paths:
+      - dub.json
+      - 'utils/**'
+      - 'source/**'
+      - .github/workflows/main.yml
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-20.04
+            dub_build: debug
+            dub_compiler: dmd-latest
+          - os: windows-latest
+            dub_build: debug
+            dub_compiler: dmd-latest
+
+          - os: ubuntu-20.04
+            dub_build: debug
+            dub_compiler: ldc-latest
+          - os: windows-latest
+            dub_build: debug
+            dub_compiler: ldc-latest
+
+          - os: ubuntu-20.04
+            dub_build: release-nobounds
+            dub_compiler: dmd-latest
+          - os: windows-latest
+            dub_build: release-nobounds
+            dub_compiler: dmd-latest
+
+          - os: ubuntu-20.04
+            dub_build: release-nobounds
+            dub_compiler: ldc-latest
+          - os: windows-latest
+            dub_build: release-nobounds
+            dub_compiler: ldc-latest
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - uses: dlang-community/setup-dlang@v1
+        with:
+          compiler: ${{ matrix.dub_compiler }}
+
+      - if: ${{ matrix.os == 'ubuntu-20.04' }}
+        run: |
+          sudo apt update
+          sudo apt install -y libasound2-dev libxi-dev
+          sudo rm /usr/bin/ld
+          sudo ln -s /usr/bin/ld.lld-11 /usr/bin/ld
+
+      - working-directory: utils/opengl
+        run: dub run
+
+      - working-directory: utils/packets
+        run: dub run
+
+      - working-directory: utils/shaders
+        run: dub run
+
+      - run: dub build -b ${{ matrix.dub_build }} -a x86_64
+
+      - uses: actions/upload-artifact@v2
+        if: ${{ matrix.dub_compiler == 'ldc-latest' && matrix.dub_build == 'release-nobounds' }}
+        with:
+          path:
+            bin/perfontain*
+
+  release:
+    runs-on: ubuntu-20.04
+    needs: [ build ]
+    if: "!contains(github.event.head_commit.message, 'WIP')"
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: anothrNick/github-tag-action@1.26.0
+        id: create_tag
+        env:
+          WITH_V: true
+          DEFAULT_BUMP: patch
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/download-artifact@v2
+
+      - working-directory: bin
+        run: |
+          mv aesir.sample.json aesir.json
+          7z a resources.zip data
+          7z a perfontain.7z viewer.bat aesir.json resources.zip angle ../artifact/*
+
+      - uses: softprops/action-gh-release@v1
+        with:
+          files: bin/perfontain.7z
+          tag_name: ${{ steps.create_tag.outputs.new_tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

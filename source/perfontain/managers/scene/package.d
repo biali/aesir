@@ -1,30 +1,9 @@
 module perfontain.managers.scene;
+import std.math, std.stdio, std.array, std.typecons, std.algorithm, stb.image, perfontain, perfontain.math,
+	perfontain.misc, perfontain.misc.draw, perfontain.misc.vmem, perfontain.opengl, perfontain.math.frustum,
+	perfontain.managers.shadow, perfontain.managers.scene.renderdata;
 
-import
-		std.math,
-		std.stdio,
-		std.array,
-		std.typecons,
-		std.algorithm,
-
-		stb.image,
-
-		perfontain,
-
-		perfontain.math,
-		perfontain.misc,
-		perfontain.misc.draw,
-		perfontain.misc.vmem,
-
-		perfontain.opengl,
-		perfontain.math.frustum,
-
-		perfontain.managers.shadow;
-
-public import
-				perfontain.render.types,
-				perfontain.managers.scene.structs;
-
+public import perfontain.render.types, perfontain.managers.scene.structs;
 
 final class SceneManager
 {
@@ -32,8 +11,15 @@ final class SceneManager
 	{
 		PE.onMove.permanent(&traceRay); // TODO: REMOVE
 
+		PE.onResize.permanent(_ => onUpdate);
 		PE.settings.fogChange.permanent(_ => onUpdate);
 		PE.settings.lightsChange.permanent(_ => onUpdate);
+		PE.settings.shadowsChange.permanent(_ => onUpdate);
+
+		debug
+		{
+			glClearColor(1, 0, 1, 0);
+		}
 	}
 
 	~this()
@@ -43,12 +29,12 @@ final class SceneManager
 
 	void onUpdate()
 	{
-		_prog = null;
+		_rd = null;
 	}
 
 	@property
 	{
-		CameraBase camera() { return _camera; }
+		CameraBase camera() => _camera;
 
 		void camera(CameraBase camera)
 		{
@@ -56,71 +42,71 @@ final class SceneManager
 			PE.window.cursor = _camera.cursor;
 		}
 
-		Scene scene() { return _scene; }
+		Scene scene() => _scene;
 
 		void scene(Scene sc)
 		{
-			_prog = null;
+			_rd = null;
 			_scene = sc;
 		}
 
-		auto ray()
-		{
-			return Tuple!(Vector3, `pos`, Vector3, `dir`)(_ray.front, _ray.back);
-		}
+		auto ray() => Tuple!(Vector3, `pos`, Vector3, `dir`)(_ray.front, _ray.back);
 
-		bool hasLights() { return _scene.lights.length && level == LIGHTS_FULL; }
+		bool hasLights() => _scene.lights.length && level == Lights.full;
 
-		ref viewProject() const { return _vp; }
+		ref viewProject() const => _vp;
 	}
 
 	Matrix4 proj;
 private:
+	mixin publicProperty!(bool, `shadowPass`);
+
 	static level()
 	{
 		return PE.settings.lights;
 	}
 
-	void compile()
+	/*void compile()
 	{
 		auto full = hasLights;
 
+		version (none)
 		{
 			auto creator = ProgramCreator(`draw`);
 
 			{
 				auto s = PE.shadows;
 
-				if(PE.settings.shadows)
+				if (PE.settings.shadows)
 				{
 					creator.define(`SHADOWS_ENABLED`);
 				}
 
-				if(s.normals || level)
+				if (s.normals || level)
 				{
 					creator.define(`LIGHT_DIR`, _scene.lightDir);
 				}
 
-				if(s.normals)
+				if (s.normals)
 				{
 					creator.define(`SHADOWS_USE_NORMALS`);
 				}
 			}
 
-			if(level)
+			if (level)
 			{
 				creator.define(`LIGHTING_ENABLED`);
 
 				creator.define(`LIGHT_AMBIENT`, _scene.ambient);
 				creator.define(`LIGHT_DIFFUSE`, _scene.diffuse);
 
-				if(full)
+				if (full)
 				{
 					creator.define(`LIGHTING_FULL`);
 				}
 			}
 
-			if(PE.settings.fog)
+			if (PE.settings.fog)
 			{
 				creator.define(`USE_FOG`);
 				creator.define(`FOG_FAR`, _scene.fogFar);
@@ -131,15 +117,13 @@ private:
 			_prog = creator.create;
 		}
 
-		if(full)
+		if (full)
 		{
 			ubyte[] buf;
 
-			foreach(ref r; _scene.lights)
+			foreach (ref r; _scene.lights)
 			{
-				auto
-						v = Vector4(r.pos, r.range),
-						u = Vector4(r.color, 0);
+				auto v = Vector4(r.pos, r.range), u = Vector4(r.color, 0);
 
 				buf ~= v.toByte;
 				buf ~= u.toByte;
@@ -148,7 +132,7 @@ private:
 			_prog.ssbo(`pe_lights`, buf, false);
 			_prog.ssbo(`pe_lights_raw`, _scene.lightIndices.map!(a => int(a)).array, false);
 		}
-	}
+	}*/
 
 package(perfontain):
 
@@ -156,48 +140,87 @@ package(perfontain):
 
 	void draw()
 	{
-		if(_scene)
+		Program pg;
+		_vp = _camera.view * proj;
+
+		if (_scene)
 		{
-			if(!_prog) compile;
+			if (_rd is null)
+			{
+				_rd = new SceneRenderData(_scene);
+			}
+
+			with (_rd)
+			{
+				if (auto rt = shadowsDepth)
+				{
+					_shadowPass = true;
+					draw(progShadowsDepth, rt, PE.shadows.makeMatrix);
+					_shadowPass = false;
+				}
+
+				if (auto rt = lightsDepth)
+				{
+					draw(progLightsDepth, rt, _vp);
+					computeLights(lightsIndices, progLightsCompute, computeBlock);
+				}
+
+				pg = progDraw;
+			}
 		}
 
-		draw(_prog, null, _camera.view * proj);
+		draw(pg, null, _vp);
 	}
 
-	void draw(Program pg, RenderTarget rt, in Matrix4 vp)
+	void computeLights(Texture tex, Program compute, ushort bs)
 	{
-		_vp = vp;
-		_culler = FrustumCuller(vp);
+		tex.imageBind(0, GL_READ_WRITE);
+
+		compute.send(`proj_view_inversed`, _vp.inversed);
+		compute.bind;
 
 		{
-			auto flags = GL_DEPTH_BUFFER_BIT;
+			Vector2s sz = tex.size;
 
-			if(rt)
-			{
-				rt.bind;
-			}
-			else
-			{
-				flags |= GL_COLOR_BUFFER_BIT;
-			}
+			sz += bs;
+			sz -= 1;
+			sz /= bs;
 
-			PEstate.viewPort = rt ? rt._tex.size : PEwindow._size;
-			PEstate.depthMask = true; // enable to clear depth buffer
-
-			glClear(flags);
+			glDispatchCompute(sz.x, sz.y, 1);
 		}
 
-		if(_scene)
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+	}
+
+	void clear(Vector2s size, uint flags)
+	{
+		PEstate.viewPort = size;
+		PEstate.depthMask = true; // otherwise depth clear won't work
+
+		glClear(flags);
+	}
+
+	void draw(Program pg, RenderTarget rt, Matrix4 vp)
+	{
+		_culler = FrustumCuller(vp);
+
+		if (rt)
+		{
+			rt.bind;
+			clear(rt.size, rt.clearFlags);
+		}
+		else
+		{
+			RenderTarget.unbind;
+			clear(PEwindow._size, GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+		}
+
+		if (_scene)
 		{
 			DrawInfo di;
 			_scene.node.draw(&di);
 
 			PE.render.doDraw(pg, RENDER_SCENE, vp, rt);
-		}
-
-		if(rt)
-		{
-			rt.unbind;
 		}
 	}
 
@@ -207,15 +230,15 @@ package(perfontain):
 		pos.y = cast(short)(sz.y - pos.y - 1);
 
 		auto v1 = unproject(pos.x, pos.y, -1, _vp, sz);
-		auto v2 = unproject(pos.x, pos.y,  1, _vp, sz);
+		auto v2 = unproject(pos.x, pos.y, 1, _vp, sz);
 
 		_ray[0] = v1;
 		_ray[1] = (v2 - v1).normalize;
 	}
 
-	RC!Program _prog;
-	RC!CameraBase _camera;
 	RC!Scene _scene;
+	RC!CameraBase _camera;
+	RC!SceneRenderData _rd;
 
 	Matrix4 _vp;
 	FrustumCuller _culler;

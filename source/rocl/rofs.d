@@ -1,31 +1,14 @@
 module rocl.rofs;
-
-import
-		std,
-
-		perfontain,
-
-		perfontain.misc.rc,
-		perfontain.filesystem,
-
-		ro.grf,
-		ro.conf,
-
-		rocl.game,
-		rocl.paths,
-
-		utils.except,
-		utils.logger,
-
-		utils.miniz : Zip;
-
+import std, perfontain, perfontain.misc.rc, perfontain.filesystem, ro.grf, ro.conf, rocl.game, rocl.paths,
+	utile.except, utile.logger, utile.miniz : Zip;
 
 final class RoFileSystem : FileSystem
 {
 	this()
 	{
 		debug
-		{}
+		{
+		}
 		else
 		{
 			_zip = new Zip(RES_FILE, false);
@@ -39,7 +22,7 @@ final class RoFileSystem : FileSystem
 
 	auto grfs()
 	{
-		if(!_arr.length)
+		if (!_arr.length)
 		{
 			auto t = TimeMeter(`loading grf files`);
 
@@ -49,64 +32,45 @@ final class RoFileSystem : FileSystem
 		return _arr[];
 	}
 
-protected:
-	override void doRead(string name, Rdg dg)
+	T read(T)(RoPath p)
 	{
-		try
-		{
-			return super.doRead(`tmp/` ~ name, dg);
-		}
-		catch(Exception)
-		{}
-
-		debug
-		{}
-		else
-		{
-			if(auto data = _zip.get(name).ifThrown(null))
-			{
-				return dg(data, false);
-			}
-		}
-
-		try
-		{
-			super.doRead(name, dg);
-		}
-		catch(Exception e)
-		{
-			if(!PE.run || name.extension == `.wav` || name.extension == `.jpg`) // TODO: REMAKE
-			{
-				foreach(g; grfs)
-				{
-					if(auto data = g.get(name))
-					{
-						return dg(data, false);
-					}
-				}
-			}
-
-			throw e;
-		}
+		return get(p).deserializeMem!T;
 	}
 
-	override void doWrite(string name, Wdg dg, ubyte t)
+	const(void)[] get(RoPath p)
 	{
-		//debug
+		foreach (grf; grfs)
+			if (auto data = grf.get(p))
+				return data;
+
+		throwError!`file %s is not found in GRFs`(p);
+		assert(0);
+	}
+
+	override ubyte[] get(string name)
+	{
+		debug
 		{
-			super.doWrite(`tmp/` ~ name, dg, t);
 		}
-		//else
-		//{
-		//	if(t == FS_DISK)
-		//	{
-		//		_op.put(name, dg(null));
-		//	}
-		//	else
-		//	{
-		//		super.doWrite(name, dg, t);
-		//	}
-		//}
+		else
+		{
+			if (auto data = _zip.get(name).ifThrown(null))
+			{
+				return data;
+			}
+		}
+
+		if (auto data = super.get(`tmp/` ~ name))
+		{
+			return data;
+		}
+
+		return super.get(name);
+	}
+
+	override void put(string name, in void[] data, ubyte t = FS_DISK)
+	{
+		super.put(`tmp/` ~ name, data, t);
 	}
 
 private:

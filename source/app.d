@@ -1,41 +1,48 @@
-import
-		core.sys.windows.windows,
-		core.sys.posix.sys.resource,
+import core.sys.windows.windows, core.sys.posix.sys.resource, perfontain, ro.conv, rocl.rofs, rocl.game;
 
-		perfontain,
-		perfontain.misc.report,
-
-		ro.conv,
-
-		rocl.rofs,
-		rocl.game;
-
-
-version(Windows)
+version (Windows)
 {
-	pragma(linkerDirective, `"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'"`);
+	//pragma(linkerDirective, `"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'"`);
 }
 
-extern(C) __gshared
+extern (C) __gshared
 {
-	bool rt_cmdline_enabled = false;
-	bool rt_envvars_enabled = false;
-	string[] rt_options = [ `scanDataSeg=precise`, `gcopt=cleanup:finalize` ]; // gc:precise
+	bool rt_cmdline_enabled;
+	bool rt_envvars_enabled;
+
+	string[] rt_options = [`scanDataSeg=precise`, `gcopt=cleanup:finalize gc:precise`];
 
 	export
 	{
-		uint
-				NvOptimusEnablement = 1,
-				AmdPowerXpressRequestHighPerformance = 1;
+		int NvOptimusEnablement = 1;
+		int AmdPowerXpressRequestHighPerformance = 1;
 	}
 }
 
 void main(string[] args)
 {
-	version(Windows)
+	version (Windows)
 	{
 		SetConsoleOutputCP(65001);
 	}
+
+	// {
+	// 	import utile.db, utile.encoding;
+
+	// 	scope db = new SQLite(`data/ro.db`);
+
+	// 	auto res = db.query!(uint, string)(`select id, name from weapons`).array;
+
+	// 	foreach (r; res)
+	// 	{
+	// 		auto data = r[1].encode(51949).toByte;
+
+	// 		if (r[1] != data)
+	// 		{
+	// 			db.query(`update weapons set name = ? where id = ?`, data, r[0]);
+	// 		}
+	// 	}
+	// }
 
 	PEfs = new RoFileSystem;
 
@@ -44,27 +51,25 @@ void main(string[] args)
 
 	try
 	{
-		if(!processConv(args))
-		{
-			RO.run(args);
-		}
+		RO.run(args);
 	}
-	catch(Throwable e)
+	catch (Throwable e)
 	{
 		debug
-		{}
+		{
+		}
 		else
 		{
 			//errorReport(e);
 		}
 
-		showErrorMessage(e.toString);
+		showErrorMessage(e.msg);
 	}
 	finally
 	{
 		RO.destroy;
 		PE.destroy;
 
-		logger(`shutdown complete`);
+		logger.msg(`shutdown complete`);
 	}
 }

@@ -1,22 +1,14 @@
 module perfontain.shader.lang;
-
-import
-		std.conv,
-		std.string,
-		std.algorithm,
-
-		perfontain,
-		perfontain.opengl,
-
-		perfontain.shader.types,
-		perfontain.shader.defineprocessor;
-
+import std.conv, std.string, std.algorithm, perfontain, perfontain.opengl, perfontain.shader.types, perfontain.shader.defineprocessor;
+public import perfontain.shader.resource;
 
 struct ProgramCreator
 {
-	this(string n)
+	this(ProgramSource ps)
 	{
-		logger.info2(`creating %s shader`, _name = n);
+		logger.info2!`creating %s program`(_ps = ps);
+
+		define(`VIEWPORT_SIZE`, PEwindow._size);
 	}
 
 	void define(string s)
@@ -34,56 +26,36 @@ struct ProgramCreator
 		_dp.defs[s] = format(`float(%g)`, v);
 	}
 
-	void define(string s, ref in Vector3 v)
+	void define(string s, in Vector3 v)
 	{
 		_dp.defs[s] = format(`vec3(%(%s, %))`, v.flat);
+	}
+
+	void define(string s, in Vector2s v)
+	{
+		_dp.defs[s] = format(`ivec2(%(%s, %))`, v.flat);
 	}
 
 	auto create()
 	{
 		RCArray!Shader res;
+		auto aa = _dp.process(_ps);
 
-		auto h = header;
-		auto aa = _dp.process(_name);
-
-		foreach(t, s; aa)
+		foreach (t, s; aa)
 		{
-			auto data = replace(h ~ s ~ "\n", "\n", "\r\n");
+			auto data = replace(s ~ "\n", "\n", "\r\n");
+			auto name = format(`shader/%s_%s.glsl`, _ps, t);
 
-			debug
-			{
-				PEfs.put(format(`shader/%s_%s.c`, _name, t), data);
-			}
+			debug PEfs.put(name, data);
 
-			auto tp = cast(ubyte)shaderNames.countUntil(t);
-			res ~= new Shader(_name, data, tp);
+			res ~= new Shader(name, data, t.shaderType);
 		}
 
-		return new Program(res.data);
+		auto shaders = res[];
+		return new Program(shaders);
 	}
 
 private:
-	auto header()
-	{
-		auto res = format("#version %u\n", OPENGL_VERSION * 10);
-
-		foreach(ex; PERF_EXTENSIONS)
-		{
-			if(mixin(ex))
-			{
-				define(ex[7..$].toUpper);
-
-				res ~= format("#extension %s : require\n", ex);
-			}
-		}
-
-		res ~= "#extension GL_ARB_shader_image_load_store : require\n";
-		res ~= "#extension GL_ARB_shading_language_420pack : require\n";
-		res ~= "#extension GL_ARB_shader_storage_buffer_object : require\n";
-
-		return res ~ "\n";
-	}
-
-	string _name;
+	ProgramSource _ps;
 	DefineProcessor _dp;
 }

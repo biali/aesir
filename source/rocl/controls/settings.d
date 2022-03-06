@@ -1,146 +1,164 @@
 module rocl.controls.settings;
+import std.meta, std.array, std.algorithm, perfontain, perfontain.opengl, ro.conv.gui, rocl, rocl.rofs, rocl.game,
+	rocl.controls, ro.paths;
 
-import
-		std.meta,
-		std.array,
-		std.algorithm,
-
-		perfontain,
-		perfontain.opengl,
-
-		ro.conv.gui,
-
-		rocl,
-		rocl.rofs,
-		rocl.game,
-		rocl.controls;
-
-
-final class WinSettings : WinBasic2
+struct WinSettings
 {
-	this(bool viewer = false)
+	void draw(bool viewer)
 	{
-		super(MSG_SETTINGS, `settings`);
+		auto sz = Vector2s(340, 255);
+		auto pos = (PE.window.size - sz) / 2;
 
-		if(pos.x < 0)
+		if (auto win = Window(nk, MSG_SETTINGS, nk_rect(pos.x, pos.y, sz.x, sz.y)))
 		{
-			center;
+			process(viewer);
 		}
+	}
 
+private:
+	mixin Nuklear;
+
+	void process(bool viewer)
+	{
 		struct S
 		{
-			string	caption,
-					var;
-
+			string caption, var;
 			string[] values;
-
 			string cond = `true`;
 		}
 
-		enum Arr =
-		[
-			S(`MSG_SHADOWS`, `PE.settings.shadows`, [ `MSG_NO`, `MSG_LOW`, `MSG_MIDDLE`, `MSG_HIGH`, `MSG_HIGHEST` ]),
-			S(`MSG_LIGHTING`, `PE.settings.lights`, [ `MSG_NO`, `MSG_DIFFUSE`, `MSG_FULL` ]),
-			S(`MSG_RENDER_QUALITY`, `PE.settings.useBindless`, [ `MSG_MIDDLE`, `MSG_HIGH` ], `GL_ARB_bindless_texture`),
+		enum Arr = [
+				S(`MSG_SHADOWS`, `PE.settings.shadows`, [`MSG_NO`, `MSG_LOW`, `MSG_MIDDLE`, `MSG_HIGH`,
+						`MSG_HIGHEST`]), S(`MSG_LIGHTING`, `PE.settings.lights`, [`MSG_NO`, `MSG_DIFFUSE`, `MSG_FULL`]),
+				S(`MSG_FOG`, `PE.settings.fog`), S(`MSG_FULLSCREEN`, `PE.settings.fullscreen`),
+				S(`MSG_ANTIALIASING`, `PE.settings.msaa`), S(`MSG_VSYNC`, `PE.settings.vsync`),
+			];
 
-			S(`MSG_FOG`, `PE.settings.fog`),
+		bool single;
+		nk.layout_row_dynamic(0, 2);
 
-			S(`MSG_FULLSCREEN`, `PE.settings.fullscreen`),
-			S(`MSG_ANTIALIASING`, `PE.settings.msaa`),
-			S(`MSG_VSYNC`, `PE.settings.vsync`),
-		];
-
-		auto t = new Table(main, Vector2s(2, 0), 2);
-
-		foreach(i, c; aliasSeqOf!Arr)
+		foreach (i, c; aliasSeqOf!Arr)
 		{
-			if(mixin(c.cond))
+			if (mixin(c.cond))
 			{
-				t.add(new GUIStaticText(null, mixin(c.caption)));
-
-				static if(c.values)
+				static if (c.values)
 				{
-					GUIElement[] arr;
+					string[] arr;
 
-					foreach(u; aliasSeqOf!(Arr[i].values))
+					foreach (u; aliasSeqOf!(Arr[i].values))
 					{
-						arr ~= new GUIStaticText(null, mixin(u));
+						arr ~= mixin(u);
 					}
 
-					auto e = new SelectBox(null, arr, mixin(c.var));
+					auto v = mixin(c.var);
+					auto label = arr[v];
+
+					nk.label(mixin(c.caption));
+
+					if (auto combo = Combo(nk, label))
+					{
+						nk.layout_row_dynamic(combo.height, 1);
+
+						foreach (k, s; arr)
+						{
+							if (combo.item(s))
+							{
+								mixin(c.var) = cast(typeof(v))k;
+							}
+						}
+					}
 				}
 				else
 				{
-					auto e = new CheckBox(null, mixin(c.var));
+					if (!single)
+					{
+						single = true;
+						nk.layout_row_dynamic(0, 1);
+					}
+
+					bool v = mixin(c.var);
+
+					if (nk.checkbox(mixin(c.caption), v))
+					{
+						mixin(c.var) = !v;
+					}
 				}
-
-				e.onChange = (a)
-				{
-					mixin(c.var ~ `= cast(typeof( ` ~ c.var ~ `))a;`);
-				};
-
-				t.add(e);
 			}
 		}
 
-		t.childs.each!(a => a.childs[0].moveY(POS_CENTER));
-
+		if (viewer)
 		{
-			auto arr = t.childs[].map!(a => a.childs.front).filter!(a => cast(SelectBox)a);
-			auto w = arr.calcSize(false).x;
-
-			arr.each!((a) { a.size.x = w; a.onResize; });
-		}
-
-		adjust;
-
-		if(viewer)
-		{
-			GUIElement[] arr;
-
-			auto maps = (cast(RoFileSystem)PEfs).grfs
-														.map!(a => a.files.byKey)
-														.joiner
-														.filter!(a => a.startsWith(`data/`) && a.endsWith(`.rsw`))
-														.map!(a => a[5..$ - 4])
-														.array
-														.sort()
-														.uniq
-														.array;
-
-			if(maps.length)
+			if (!_maps)
 			{
-				foreach(n; maps)
+				auto ro = cast(RoFileSystem)PEfs;
+
+				_maps = ro.grfs
+					.map!(a => a.files.byKey)
+					.joiner
+					.filter!(a => a.data.startsWith(`data/`) && a.data.endsWith(`.rsw`))
+					.map!(a => a.data[5 .. $ - 4])
+					.array
+					.sort
+					.uniq
+					.map!(a => RoPath(a).toString)
+					.array;
+			}
+
+			if (auto combo = Combo(nk, ROres.mapName))
+			{
+				nk.layout_row_dynamic(combo.height, 1);
+
+				foreach (m; _maps)
 				{
-					arr ~= new GUIStaticText(null, n);
+					if (combo.item(m))
+					{
+						try
+						{
+							ROres.load(m);
+						}
+						catch (Exception e)
+						{
+							logger.error(e);
+						}
+					}
 				}
+			}
 
-				auto e = new SelectBox(bottom, arr, cast(short)maps.countUntil(`prontera`));
+			//GUIElement[] arr;
 
-				e.onChange = (a)
-				{
+			// auto maps = (cast(RoFileSystem)PEfs).grfs
+			// 	.map!(a => a.files.byKey)
+			// 	.joiner
+			// 	.filter!(a => a.startsWith(`data/`) && a.endsWith(`.rsw`))
+			// 	.map!(a => a[5 .. $ - 4])
+			// 	.array
+			// 	.sort().uniq.array;
+
+			//if (maps.length) // TODO: FIX
+			{
+				/*auto e = new TextCombo(curLayout, maps, cast(short) maps.countUntil(`prontera`));
+
+				e.onChange = (a) {
 					try
 					{
 						ROres.load(maps[a]);
 					}
-					catch(Exception e)
+					catch (Exception e)
 					{
 						e.logger;
 					}
-				};
 
-				e.move(POS_MIN, 4, POS_CENTER);
+					return true;
+				};*/
 			}
 		}
 		else
 		{
-			auto e = new Button(bottom, MSG_HOTKEYS, () => RO.gui.createHotkeySettings); // TODO: DELEGATE
-			e.move(POS_MIN, 4, POS_CENTER);
+			//auto e = new Button(this, MSG_HOTKEYS, () => RO.gui.createHotkeySettings); // TODO: DELEGATE
+			//e.move(POS_MIN, 4, POS_CENTER);
 		}
 	}
 
-	override void poseDefault()
-	{
-		center;
-	}
+private:
+	string[] _maps;
 }

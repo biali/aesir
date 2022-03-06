@@ -1,38 +1,42 @@
 module rocl.game;
+import std, perfontain, perfontain.misc, ro.db, ro.str, ro.conv, rocl.loaders.asp, rocl, rocl.gui, rocl.status,
+	rocl.entity, rocl.network, rocl.controls, rocl.resources, rocl.controller.npc, rocl.controller.item,
+	rocl.controller.action, rocl.controller.effect, rocl.rofs;
 
-import
-		std,
+@property ROfs()
+{
+	return cast(RoFileSystem)PEfs;
+}
 
-		perfontain,
-		perfontain.misc,
-		perfontain.misc.report,
+@property ref RO()
+{
+	return Game.instance;
+}
 
-		ro.db,
-		ro.str,
-		ro.conv,
-		rocl.loaders.asp,
+@property ROdb()
+{
+	return RO._db;
+}
 
-		rocl,
-		rocl.gui,
-		rocl.status,
-		rocl.entity,
-		rocl.network,
-		rocl.controls,
-		rocl.resources,
+@property ROent()
+{
+	return RO._emgr;
+}
 
-		rocl.controller.npc,
-		rocl.controller.item,
-		rocl.controller.action,
-		rocl.controller.effect;
+@property ROres()
+{
+	return RO._rmgr;
+}
 
+@property ROnet()
+{
+	return RO._pmgr;
+}
 
-@property ref RO() { return Game.instance; }
-
-@property ROdb() { return RO._db; }
-@property ROent() { return RO._emgr; }
-@property ROres() { return RO._rmgr; }
-@property ROnet() { return RO._pmgr; }
-@property ROnpc() { return RO._npc; }
+ref ROnpc() @property
+{
+	return RO.gui.npc;
+}
 
 final class Game
 {
@@ -56,32 +60,26 @@ final class Game
 	void run(string[] args)
 	{
 		bool viewer;
-		string login;
+		string user, pass, backend;
 
-		getopt(args, `login`, &login, `viewer`, &viewer);
+		getopt(args, `viewer`, &viewer, `user`, &user, `pass`, &pass, `backend`, &backend);
 
-		if(!viewer && !login.length)
+		if (initialize(viewer ? 45 : 15, backend))
 		{
-			return;
-		}
-
-		if(initialize(login.length ? 15 : 45))
-		{
-			if(login.length)
-			{
-				auto r = login.findSplit(`:`);
-
-				auto
-						user = r[0],
-						pass = r[2];
-
-				gui.show;
-				ROnet.login(user, pass);
-			}
-			else
+			if (viewer)
 			{
 				//if(std.file.exists(`tmp/map/prontera.rom`)) std.file.remove(`tmp/map/prontera.rom`);
 				mapViewer;
+			}
+			else
+			{
+				gui.show;
+
+				if (user.length)
+				{
+					gui.login = null; // TODO: rewrite
+					ROnet.login(user, pass);
+				}
 			}
 
 			PE.work;
@@ -110,17 +108,16 @@ private:
 		debug
 		{
 			PE.hotkeys.add(Hotkey(null, { PEstate.wireframe = !PEstate.wireframe; return true; }, SDLK_F11));
-			PE.hotkeys.add(Hotkey(null, { PE.shadows.tex.toImage.saveToFile(`shadows.tga`, IM_TGA); return true; }, SDLK_F10));
+			//PE.hotkeys.add(Hotkey(null, { PE.shadows.tex.toImage.saveToFile(`shadows.tga`, IM_TGA); return true; }, SDLK_F10));
 		}
 
 		auto p = Vector3(0, 24.810, 0);
 		PEscene.camera = new CameraFPS(p, p + Vector3(0.657, 0, -0.657));
 
-		auto w = new WinSettings(true);
-		PE.hotkeys.add(Hotkey(null, { w.show(!w.visible); return true; }, SDLK_F12));
+		gui.isViewer = true;
 	}
 
-	bool initialize(uint fov)
+	bool initialize(uint fov, string backend)
 	{
 		auto t = TimeMeter(`main window creation`);
 
@@ -133,17 +130,26 @@ private:
 
 		try
 		{
-			PE.create(`Æsir`);
+			PE.create(`Æsir`, backend ? backend : `vulkan`);
 		}
-		catch(Exception e)
+		catch (Exception e)
 		{
-			//errorReport(e);
-			showErrorMessage("Your graphics driver seems to be outdated.\nUpdate it and try again.\n\nError message: " ~ e.msg);
+			debug
+			{
+				logger.msg(e);
+			}
+			else
+				showErrorMessage("Your graphics driver seems to be outdated.\nUpdate it and try again.\n\nError message: " ~ e.msg);
+
 			return false;
 		}
 
 		PE.timers.add(&onWork, 0, 0);
 		ctors;
+
+		PE.gui.drawGUI = &gui.draw;
+
+		PE.hotkeys.add(Hotkey(null, { gui.showSettings ^= true; return true; }, SDLK_ESCAPE));
 
 		return true;
 	}
@@ -154,11 +160,9 @@ private:
 		_emgr.process;
 	}
 
-	mixin createCtorsDtors!(_rmgr, _db, gui, _emgr, _pmgr, _npc, action, status, items, effects);
+	mixin createCtorsDtors!(_rmgr, _db, gui, _emgr, _pmgr, action, status, items, effects);
 
 	RoDb _db;
-
-	NpcController _npc;
 	PacketManager _pmgr;
 	EntityManager _emgr;
 	ResourcesManager _rmgr;

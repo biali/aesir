@@ -1,17 +1,14 @@
 module perfontain.config;
-
-import
-		perfontain.vbo,
-		perfontain.misc,
-		perfontain.math.matrix;
-
+import perfontain.vbo, perfontain.misc, perfontain.math.matrix;
 
 enum
 {
 	// core
 	MSAA_LEVEL = 4,
 
-	OPENGL_VERSION = 33,
+	ANGLE_DIR = `angle`,
+	OPENGL_VERSION = 31,
+
 	MAX_LAYERS = 4,
 
 	IDLE_FPS = 20,
@@ -25,13 +22,12 @@ enum
 
 	// misc
 	LOG_FILE = `perfontain.log`,
-	SETTINGS_FILE = `settings.json`,
+	SETTINGS_FILE = `settings.dat`,
 }
 
 static immutable
 {
-	uint[3]		triangleOrder = [ 0, 1, 2 ],
-				triangleOrderReversed = [ 2, 1, 0 ];
+	uint[3] triangleOrder = [0, 1, 2], triangleOrderReversed = [2, 1, 0];
 
 	auto noBlending = packModes(2, 1);
 	auto blendingNormal = packModes(5, 6);

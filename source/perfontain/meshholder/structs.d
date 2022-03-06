@@ -1,8 +1,5 @@
 module perfontain.meshholder.structs;
-
-import
-		perfontain;
-
+import perfontain;
 
 struct HolderData
 {
@@ -14,7 +11,7 @@ struct HolderData
 	ubyte type;
 	SubMeshData data;
 
-	@(`ushort`)
+	@(ArrayLength!ushort)
 	{
 		HolderMesh[] meshes;
 		TextureInfo[] textures;
@@ -23,14 +20,11 @@ struct HolderData
 
 struct HolderSubMesh
 {
-	uint
-			len,
-			start;
-
+	uint len, start;
 	ushort tex;
 }
 
 struct HolderMesh
 {
-	@(`ubyte`) HolderSubMesh[] subs;
+	@(ArrayLength!ubyte) HolderSubMesh[] subs;
 }

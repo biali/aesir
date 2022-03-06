@@ -1,16 +1,5 @@
 module ro.sprite.spr;
-
-import
-		std.range,
-		std.stdio,
-		std.algorithm,
-
-		stb.image,
-
-		perfontain.math.matrix,
-		perfontain.misc,
-
-		utils.except;
+import std.range, std.stdio, std.algorithm, stb.image, perfontain.math.matrix, perfontain.misc, utile.except;
 
 struct ImageOffset
 {
@@ -24,23 +13,23 @@ struct ImageInfo
 	ImageOffset[] images;
 }
 
-auto toInfo(ref in SprFile f)
+auto toInfo(in SprFile f)
 {
 	auto res = ImageInfo(f.pCnt);
 
-	foreach(ref i; f.pImages)
+	foreach (ref i; f.pImages)
 	{
 		const(Color)[] data;
 
-		if(f.ver == 0x200)
+		if (f.ver == 0x200)
 		{
 			data = f.palette[].indexed(i.data).array;
 		}
 		else
 		{
-			for(auto p = i.data.ptr, e = p + i.data.length; p != e; p++)
+			for (auto p = i.data.ptr, e = p + i.data.length; p != e; p++)
 			{
-				if(*p)
+				if (*p)
 				{
 					data ~= f.palette[*p];
 				}
@@ -57,7 +46,7 @@ auto toInfo(ref in SprFile f)
 		res.images ~= ImageOffset(new Image(i.size.x, i.size.y, data));
 	}
 
-	foreach(ref i; f.rImages)
+	foreach (ref i; f.rImages)
 	{
 		auto im = new Image(i.size.x, i.size.y, i.data);
 
@@ -66,7 +55,7 @@ auto toInfo(ref in SprFile f)
 		res.images ~= ImageOffset(im);
 	}
 
-	foreach(i, ref v; res.images) // TODO: VERIFY
+	foreach (i, ref v; res.images) // TODO: VERIFY
 	{
 		/*auto b = v.im.borderlessParam(&colorTransparent, 0, 0);
 
@@ -85,26 +74,27 @@ auto toInfo(ref in SprFile f)
 struct SprRGBA
 {
 	Vector2s size;
-	@(`length`, `size.x * size.y * 4`) ubyte[] data;
+	@(ArrayLength!(e => e.that.size.x * e.that.size.y * 4)) ubyte[] data;
 }
 
 struct SprPalette
 {
 	Vector2s size;
 
-	@(`ignoreif`, `STRUCT.ver == 0x200`, `default`, `cast(ushort)(size.x * size.y)`) ushort len;
-	@(`length`, `len`) ubyte[] data;
+	@(IgnoreIf!(e => e.input.ver == 0x200), Default!(e => cast(ushort)(e.that.size.x * e.that.size.y))) ushort len;
+
+	@(ArrayLength!(e => e.that.len)) ubyte[] data;
 }
 
 struct SprFile
 {
 	static immutable char[2] bom = `SP`;
-	@(`validif`, `ver == 0x200 || ver == 0x201`) ushort ver;
+	@(Validate!(e => e.that.ver == 0x200 || e.that.ver == 0x201)) ushort ver;
 
 	ushort pCnt, rCnt;
 
-	@(`length`, `pCnt`) SprPalette[] pImages;
-	@(`length`, `rCnt`) SprRGBA[] rImages;
+	@(ArrayLength!(e => e.that.pCnt)) SprPalette[] pImages;
+	@(ArrayLength!(e => e.that.rCnt)) SprRGBA[] rImages;
 
 	Color[256] palette;
 }

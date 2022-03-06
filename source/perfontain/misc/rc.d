@@ -1,17 +1,5 @@
 module perfontain.misc.rc;
-
-import
-		std.conv,
-		std.algorithm,
-
-		std.experimental.allocator,
-		std.experimental.allocator.mallocator,
-
-		core.memory,
-
-		utils.misc,
-		utils.logger;
-
+import std, std.experimental.allocator, std.experimental.allocator.mallocator, core.memory, utile.misc, utile.logger;
 
 //version = LOG_RC;
 alias Alloc = Mallocator.instance;
@@ -32,17 +20,13 @@ class RCounted
 {
 	~this()
 	{
-		version(LOG_RC)
-		{
-			log(`%s destroying`, this);
-		}
+		version (LOG_RC)
+			logger.msg!`%s destroying`(this);
 
 		debug
 		{
-			if(!_wasFreed)
-			{
-				logger.error(`%s was never acquired`, this);
-			}
+			if (!_wasFreed)
+				logger.error!`%s was never acquired`(this);
 		}
 	}
 
@@ -61,14 +45,12 @@ final:
 
 		_refs++;
 
-		version(LOG_RC)
-		{
-			log(`%s, %u refs`, this, _refs);
-		}
+		version (LOG_RC)
+			logger.msg!`%s, %u refs`(this, _refs);
 
 		debug
 		{
-			rcLeaks[cast(void *)this]++;
+			rcLeaks[cast(void*)this]++;
 		}
 	}
 
@@ -76,53 +58,45 @@ final:
 	{
 		assert(_refs);
 
-		version(LOG_RC)
-		{
-			log(`%s, %u refs`, this, _refs - 1);
-		}
+		version (LOG_RC)
+			logger.msg!`%s, %u refs`(this, _refs - 1);
 
-		if(!--_refs)
+		if (!--_refs)
 		{
 			debug
 			{
 				_wasFreed = true;
-				rcLeaks.remove(cast(void *)this);
+				rcLeaks.remove(cast(void*)this);
 			}
 
-			auto b = useAllocator;
+			const b = useAllocator;
 			auto sz = b ? typeid(this).initializer.length : 0;
 
 			this.destroy;
 
-			if(b)
+			if (b)
 			{
-				auto p = (cast(void *)this)[0..sz];
+				auto p = (cast(void*)this)[0 .. sz];
 
 				GC.removeRange(p.ptr);
 				Alloc.deallocate(p);
 			}
 		}
-		else debug
-		{
-			rcLeaks[cast(void *)this]--;
-		}
+		else
+			debug rcLeaks[cast(void*)this]--;
 	}
 
 	bool useAllocator;
 private:
 	uint _refs;
-
-	debug
-	{
-		bool _wasFreed;
-	}
+	debug bool _wasFreed;
 }
 
 struct RC(T)
 {
 	this(T p)
 	{
-		if(p)
+		if (p)
 		{
 			_rcElem = p;
 			p.acquire;
@@ -131,35 +105,27 @@ struct RC(T)
 
 	~this()
 	{
-		if(_rcElem)
-		{
+		if (_rcElem)
 			_rcElem.release;
-		}
 	}
 
 	this(this)
 	{
-		if(_rcElem)
-		{
+		if (_rcElem)
 			_rcElem.acquire;
-		}
 	}
 
 	T opAssign(T p)
 	{
-		assert(!p || _rcElem ! is p);
+		assert(!p || _rcElem !is p);
 
-		if(_rcElem)
-		{
+		if (_rcElem)
 			_rcElem.release;
-		}
 
 		_rcElem = p;
 
-		if(_rcElem)
-		{
+		if (_rcElem)
 			_rcElem.acquire;
-		}
 
 		return p;
 	}
@@ -203,19 +169,22 @@ struct RCArray(T)
 	void remove(T t)
 	{
 		auto idx = _arr.countUntil!(a => a is t);
+		auto e = _arr[idx];
 
-		_arr[idx].release;
 		_arr.remove(idx);
-
 		resize(length - 1);
+
+		e.release;
 	}
 
 	void opIndexAssign(T p, size_t idx)
 	{
-		_arr[idx].release;
-		_arr[idx] = p;
+		auto e = _arr[idx];
 
+		_arr[idx] = p;
 		p.acquire;
+
+		e.release;
 	}
 
 	void opOpAssign(string op : `~`)(T p)
@@ -224,6 +193,17 @@ struct RCArray(T)
 
 		p.acquire;
 		_arr[$ - 1] = p;
+	}
+
+	void opOpAssign(string op : `~`)(T[] arr)
+	{
+		resize(length + arr.length);
+
+		foreach (i, p; arr)
+		{
+			p.acquire;
+			_arr[$ - arr.length + i] = p;
+		}
 	}
 
 	void opAssign(T[] u)
@@ -250,11 +230,6 @@ struct RCArray(T)
 		return _arr[idx];
 	}
 
-	inout data()
-	{
-		return _arr;
-	}
-
 	inout opSlice()
 	{
 		return _arr;
@@ -262,7 +237,7 @@ struct RCArray(T)
 
 	inout opSlice(size_t start, size_t end)
 	{
-		return _arr[start..end];
+		return _arr[start .. end];
 	}
 
 	const length()
@@ -278,22 +253,20 @@ struct RCArray(T)
 private:
 	void resize(size_t len)
 	{
-		if(_arr.ptr)
-		{
+		if (_arr.ptr)
 			GC.removeRange(_arr.ptr);
-		}
 
-		if(len)
+		if (len)
 		{
 			void[] u = _arr;
 
-			auto b = Alloc.reallocate(u, len * size_t.sizeof);
+			const b = Alloc.reallocate(u, len * size_t.sizeof);
 			assert(b);
 
 			GC.addRange(u.ptr, u.length);
 			_arr = u.as!T;
 		}
-		else if(_arr.ptr)
+		else if (_arr.ptr)
 		{
 			Alloc.deallocate(_arr);
 			_arr = null;
@@ -320,33 +293,28 @@ auto asRC(T)(T p)
 	return RC!T(p);
 }
 
-void logLeaks()
+debug
 {
-	debug
+	void logLeaks()
 	{
-		if(rcLeaks.length)
+		debug
 		{
-			logger.error(`reference counting leaks:`);
-			logger.ident++;
-
-			foreach(k, v; rcLeaks)
+			if (rcLeaks.length)
 			{
-				logger.warning(`%s - %u refs`, (cast(Object)k).toString, v);
+				logger.error(`reference counting leaks:`);
+				logger.ident++;
+
+				foreach (k, v; rcLeaks)
+				{
+					logger.warning!`%s - %u refs`((cast(Object)k).toString, v);
+				}
+
+				logger.ident--;
 			}
-
-			logger.ident--;
-		}
-		else
-		{
-			logger.info(`no reference counting leaks are found`);
+			else
+				logger.info(`no reference counting leaks are found`);
 		}
 	}
-}
 
-private
-{
-	debug
-	{
-		uint[void *] rcLeaks;
-	}
+	private uint[void* ] rcLeaks;
 }
