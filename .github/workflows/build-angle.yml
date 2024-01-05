@@ -13,12 +13,10 @@ jobs:
   find_version:
     runs-on: ubuntu-latest
     outputs:
-      result: 6167 #${{ steps.main.outputs.version }}
-    # steps:
-    #   - id: main
-    #     run: |
-    #       VER=$(wget -qO- http://chromiumdash.appspot.com/all.json | jq -r '.[] | select(.os == "win64") .versions[] | select(.channel == "stable") .true_branch')
-    #       echo "::set-output name=version::chromium/$VER"
+      result: ${{ steps.main.outputs.version }}
+    steps:
+      - id: main
+        run:  echo "::set-output name=version::chromium/6167"
 
   build:
     needs: find_version
