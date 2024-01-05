@@ -17,7 +17,7 @@ jobs:
     steps:
       - id: main
         run: |
-          VER=$(wget -qO- http://omahaproxy.appspot.com/all.json | jq -r '.[] | select(.os == "win64") .versions[] | select(.channel == "stable") .true_branch')
+          VER=$(wget -qO- http://chromiumdash.appspot.com/all.json | jq -r '.[] | select(.os == "win64") .versions[] | select(.channel == "stable") .true_branch')
           echo "::set-output name=version::chromium/$VER"
 
   build:
